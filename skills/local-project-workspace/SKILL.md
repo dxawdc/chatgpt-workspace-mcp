@@ -1,9 +1,9 @@
 ---
 name: local-project-workspace
-description: Safely inspect, edit, test, and review explicitly authorized local project folders through the Local Project Workspace MCP tools.
+description: Safely inspect, edit, test, and review explicitly authorized local project folders through the Secure Local Workspace MCP tools.
 ---
 
-# Local Project Workspace
+# Secure Local Workspace MCP
 
 Use the MCP tools to work only with project IDs returned by `list_projects`.
 

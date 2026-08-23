@@ -15,6 +15,7 @@ config.json
 *.pfx
 
 .local-project-workspace/
+.secure-local-workspace-mcp/
 tunnel-profiles/
 secrets/
 downloads/

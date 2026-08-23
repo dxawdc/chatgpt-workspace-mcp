@@ -31,7 +31,7 @@ function register(server, name, definition, handler) {
 const config = await loadConfig();
 const service = createWorkspaceService(config);
 const server = new McpServer(
-  { name: "local-project-workspace", version: "0.1.0" },
+  { name: "secure-local-workspace-mcp", version: "0.1.0" },
   {
     instructions:
       "Work only with configured project IDs. Read a file immediately before editing and pass its sha256 to apply_patch. After edits, inspect git_diff and run only configured tasks. Preserve unrelated changes. This server has no arbitrary shell, delete, commit, push, or deploy tools.",
@@ -186,4 +186,4 @@ register(
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error(`local-project-workspace ready; config=${config.configPath}; projects=${config.projects.length}`);
+console.error(`secure-local-workspace-mcp ready; config=${config.configPath}; projects=${config.projects.length}`);

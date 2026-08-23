@@ -17,7 +17,7 @@ const limits = {
 };
 
 async function fixture(t) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "local-project-workspace-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "secure-local-workspace-mcp-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, "src"));
   await writeFile(path.join(root, "src", "hello.js"), "export const greeting = 'hello';\n", "utf8");

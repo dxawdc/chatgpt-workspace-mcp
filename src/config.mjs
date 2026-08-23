@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -51,10 +52,12 @@ const ConfigSchema = z.object({
 });
 
 export function defaultConfigPath() {
-  return path.resolve(
-    process.env.LOCAL_PROJECT_WORKSPACE_CONFIG ||
-      path.join(os.homedir(), ".local-project-workspace", "config.json"),
-  );
+  if (process.env.LOCAL_PROJECT_WORKSPACE_CONFIG) {
+    return path.resolve(process.env.LOCAL_PROJECT_WORKSPACE_CONFIG);
+  }
+  const preferred = path.join(os.homedir(), ".secure-local-workspace-mcp", "config.json");
+  const legacy = path.join(os.homedir(), ".local-project-workspace", "config.json");
+  return path.resolve(existsSync(preferred) || !existsSync(legacy) ? preferred : legacy);
 }
 
 export async function loadConfig(configPath = defaultConfigPath()) {

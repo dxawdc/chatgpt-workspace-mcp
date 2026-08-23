@@ -1,12 +1,12 @@
 {
   "name": "local-project-workspace",
-  "version": "0.1.0+codex.20260823111029",
-  "description": "Safely read, search, edit, test, and review explicitly allowed local projects through MCP.",
+  "version": "0.1.0+codex.20260823113816",
+  "description": "Securely read, search, edit, test, and review explicitly authorized local projects through MCP.",
   "author": {
-    "name": "Local Project Workspace contributors"
+    "name": "Secure Local Workspace MCP contributors"
   },
-  "homepage": "https://github.com/dxawdc/local-project-workspace",
-  "repository": "https://github.com/dxawdc/local-project-workspace",
+  "homepage": "https://github.com/dxawdc/secure-local-workspace-mcp",
+  "repository": "https://github.com/dxawdc/secure-local-workspace-mcp",
   "license": "MIT",
   "keywords": [
     "chatgpt",
@@ -16,10 +16,10 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Local Project Workspace",
-    "shortDescription": "Work safely with explicitly allowed local project folders.",
-    "longDescription": "Connect ChatGPT or Codex to selected local projects through a safety-scoped MCP server. Read and search files, apply hash-guarded patches, run allowlisted tasks, and review Git changes without exposing an arbitrary shell.",
-    "developerName": "Local Project Workspace contributors",
+    "displayName": "Secure Local Workspace MCP",
+    "shortDescription": "\u5b89\u5168\u8fde\u63a5 AI \u4e0e\u660e\u786e\u6388\u6743\u7684\u672c\u5730\u9879\u76ee\u76ee\u5f55\u3002",
+    "longDescription": "\u901a\u8fc7\u5b89\u5168\u8fb9\u754c\u660e\u786e\u7684 MCP \u670d\u52a1\uff0c\u5c06 ChatGPT \u6216 Codex \u8fde\u63a5\u5230\u9009\u5b9a\u7684\u672c\u5730\u9879\u76ee\u3002\u652f\u6301\u8bfb\u53d6\u3001\u641c\u7d22\u3001SHA-256 \u4fdd\u62a4\u7684\u8865\u4e01\u4fee\u6539\u3001\u767d\u540d\u5355\u4efb\u52a1\u4e0e Git \u68c0\u67e5\uff0c\u4e0d\u66b4\u9732\u4efb\u610f Shell\u3002",
+    "developerName": "Secure Local Workspace MCP contributors",
     "category": "Developer Tools",
     "capabilities": [
       "Local files",

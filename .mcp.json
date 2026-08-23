@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "local-project-workspace": {
-      "title": "Local Project Workspace",
+    "secure-local-workspace-mcp": {
+      "title": "Secure Local Workspace MCP",
       "description": "Safety-scoped access to explicitly allowed local projects.",
       "cwd": ".",
       "command": "node",

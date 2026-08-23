@@ -1,23 +1,24 @@
 {
-  "name": "local-project-workspace",
+  "name": "secure-local-workspace-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A safety-scoped MCP server that lets ChatGPT and Codex work with explicitly allowed local projects.",
+  "description": "A safety-scoped MCP gateway that lets ChatGPT and Codex work with explicitly authorized local projects.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dxawdc/local-project-workspace.git"
+    "url": "git+https://github.com/dxawdc/secure-local-workspace-mcp.git"
   },
-  "homepage": "https://github.com/dxawdc/local-project-workspace#readme",
+  "homepage": "https://github.com/dxawdc/secure-local-workspace-mcp#readme",
   "bugs": {
-    "url": "https://github.com/dxawdc/local-project-workspace/issues"
+    "url": "https://github.com/dxawdc/secure-local-workspace-mcp/issues"
   },
   "keywords": [
     "chatgpt",
     "codex",
     "mcp",
     "local-files",
+    "secure-workspace",
     "developer-tools"
   ],
   "scripts": {
