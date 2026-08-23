@@ -288,7 +288,11 @@ export async function isGitProjectRoot(candidate) {
     if (!stat.isDirectory()) return false;
     const result = await runGit(candidate, ["rev-parse", "--show-toplevel"], { allowFailure: true });
     if (result.exitCode !== 0) return false;
-    return path.resolve(result.stdout.trim()) === path.resolve(candidate);
+    const detectedRoot = path.resolve(result.stdout.trim());
+    const expectedRoot = path.resolve(candidate);
+    return process.platform === "win32"
+      ? detectedRoot.toLowerCase() === expectedRoot.toLowerCase()
+      : detectedRoot === expectedRoot;
   } catch {
     return false;
   }

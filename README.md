@@ -2,7 +2,7 @@
 
 [English](README.en.md) | 中文（默认）
 
-让 ChatGPT 网页版安全连接本地 Git 项目：查看和搜索代码、修改文件、运行测试、检查差异、创建本地提交，并在用户显式授权后推送到指定远端和分支。
+让 ChatGPT 网页版安全连接本地项目：无论是否使用 Git，都可以查看、搜索和修改文件、运行白名单任务；Git 项目还可以检查差异、创建本地提交，并在用户显式授权后推送到指定远端和分支。
 
 你不需要安装 Codex。ChatGPT 通过 OpenAI Secure MCP Tunnel 调用仍运行在你电脑上的 MCP 服务；项目目录和 MCP 端口不需要暴露到公网。
 
@@ -20,7 +20,7 @@
 
 | 工作流 | MCP 工具 | 关键保护 |
 | --- | --- | --- |
-| 发现项目 | `diagnostics`、`list_projects`、`discover_projects` | 只扫描本机预先批准的项目父目录 |
+| 发现项目 | `diagnostics`、`list_projects`、`discover_projects` | 识别 Git 仓库和常见非 Git 工程，只扫描预先批准的父目录 |
 | 接入或撤销 | `connect_project`、`disconnect_project` | 不能越过批准范围；撤销不会删除项目文件 |
 | 查看和搜索 | `list_files`、`read_file`、`search_text` | 限制目录、深度、数量和文件大小 |
 | 修改文件 | `apply_patch`、`create_text_file`、`delete_text_file` | 修改或删除现有文件必须匹配最新 SHA-256 |
@@ -107,7 +107,7 @@ notepad "C:\Secrets\openai-tunnel-runtime-key.txt"
 
 参数怎么填：
 
-- `ProjectRoot`：这次要交给 ChatGPT 操作的 Git 项目根目录；
+- `ProjectRoot`：这次要交给 ChatGPT 操作的项目目录，可以不是 Git 仓库；
 - `DiscoveryRoot`：允许 ChatGPT 发现项目的父目录，通常是 `ProjectRoot` 的上一级；
 - `TunnelId`：OpenAI Platform 显示的真实 `tunnel_id`；
 - `TunnelClient`：下载并解压后的 `tunnel-client.exe`；
@@ -123,7 +123,7 @@ notepad "C:\Secrets\openai-tunnel-runtime-key.txt"
 6. 创建并检查 Tunnel profile；
 7. 注册当前用户登录自启动任务并立即启动 Tunnel。
 
-默认不允许 push。
+默认不允许 push。非 Git 项目会自动保留文件读写能力，同时强制关闭 commit 和 push，不需要手动添加 `-DisableCommit`。
 
 如果本机访问 OpenAI 必须经过代理，在命令末尾增加：
 
@@ -170,6 +170,19 @@ notepad "C:\Secrets\openai-tunnel-runtime-key.txt"
 这会增加或更新项目配置，不会覆盖其他已授权项目。
 
 如果没有使用本项目注册登录任务，请去掉 `-RestartTunnel`，配置完成后用原来的方式重启 `tunnel-client`。重启后在 ChatGPT 应用设置中刷新工具。
+
+### 让 ChatGPT 自动接入非 Git 项目
+
+常见的 Node.js、Python、Java、Go、Rust、.NET、PHP、Ruby、Elixir、Swift、CMake 等工程目录会被 `discover_projects` 自动识别。即使目录没有常见工程标识，也可以在已批准的 `DiscoveryRoot` 内通过明确绝对路径接入：
+
+```text
+调用 discover_projects，列出已批准目录中的 Git 和非 Git 项目。
+把 D:\Projects\notes-app 接入为可读写项目。
+如果它不是 Git 仓库，必须自动关闭 commit 和 push。
+接入后调用 list_projects，确认 projectType 和最终权限。
+```
+
+ChatGPT 调用 `connect_project` 后配置会立即持久化并在当前 MCP 进程生效，不需要为单个项目再次重启 Tunnel。
 
 ### 只允许查看，不允许修改
 
@@ -399,8 +412,10 @@ git config --global user.email "you@example.com"
 
 ### 项目无法发现或接入
 
-- 项目必须是 Git 仓库根目录；
 - 项目必须位于已批准的 `DiscoveryRoot` 内；
+- Git 仓库和包含常见工程标识的非 Git 目录会自动出现在发现结果中；
+- 没有工程标识的普通目录不会自动列出，但可以让 ChatGPT 使用它的明确绝对路径调用 `connect_project`；
+- 非 Git 项目会显示 `projectType: non-git`，并强制关闭 commit 和 push；
 - 运行 `npm run config -- list` 检查实际配置；
 - 需要时重新添加父目录并重启 Tunnel。
 

@@ -1,6 +1,6 @@
 {
   "name": "secure-local-workspace-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "A safety-scoped MCP gateway that lets ChatGPT and Codex work with explicitly authorized local projects.",

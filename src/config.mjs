@@ -22,6 +22,7 @@ const ProjectSchema = z.object({
   id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
   label: z.string().min(1).max(120).optional(),
   root: z.string().min(1),
+  projectType: z.enum(["git", "non-git"]).optional(),
   writable: z.boolean().default(false),
   ignoreNames: z.array(z.string().min(1)).default([
     "node_modules",

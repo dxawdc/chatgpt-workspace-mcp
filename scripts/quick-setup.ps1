@@ -89,7 +89,29 @@ try {
 
   foreach ($root in $ProjectRoot) {
     $resolved = (Resolve-Path -LiteralPath $root).Path
-    if (-not $ReadOnly -and -not $DisableCommit) {
+    $gitTopLevel = (& git -C $resolved rev-parse --show-toplevel 2>$null)
+    $gitExitCode = $LASTEXITCODE
+    $resolvedComparable = [IO.Path]::GetFullPath($resolved).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar,
+      [IO.Path]::AltDirectorySeparatorChar
+    )
+    $gitComparable = if ($gitExitCode -eq 0 -and $gitTopLevel) {
+      [IO.Path]::GetFullPath($gitTopLevel.Trim()).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar
+      )
+    } else {
+      $null
+    }
+    $isGitProject = $gitComparable -and [StringComparer]::OrdinalIgnoreCase.Equals($resolvedComparable, $gitComparable)
+    if (-not $isGitProject -and $AllowPush) {
+      throw "-AllowPush cannot be used for non-Git project: $resolved"
+    }
+    $effectiveAllowCommit = -not $ReadOnly -and -not $DisableCommit -and $isGitProject
+    if (-not $isGitProject -and -not $ReadOnly -and -not $DisableCommit) {
+      Write-Warning "Non-Git project detected; file editing stays enabled, while commit and push are disabled: $resolved"
+    }
+    if ($effectiveAllowCommit) {
       $gitName = (& git -C $resolved config user.name 2>$null)
       $gitEmail = (& git -C $resolved config user.email 2>$null)
       if (-not $gitName -or -not $gitEmail) {
@@ -101,8 +123,8 @@ try {
       $arguments += @("--read-only", "--no-commit", "--no-push")
     } else {
       $arguments += "--writable"
-      if ($DisableCommit) { $arguments += "--no-commit" } else { $arguments += "--allow-commit" }
-      if ($AllowPush) { $arguments += "--allow-push" } else { $arguments += "--no-push" }
+      if ($effectiveAllowCommit) { $arguments += "--allow-commit" } else { $arguments += "--no-commit" }
+      if ($AllowPush -and $isGitProject) { $arguments += "--allow-push" } else { $arguments += "--no-push" }
     }
     foreach ($remote in $AllowedRemote) { $arguments += @("--remote", $remote) }
     foreach ($branch in $AllowedBranch) { $arguments += @("--branch", $branch) }

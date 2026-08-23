@@ -15,6 +15,7 @@ The guarded commit tool rejects common secret-bearing paths and high-confidence 
 ## Authorization boundaries
 
 - Project discovery is limited to parent folders approved in the local configuration.
+- Common non-Git project folders may be discovered, and any explicit directory beneath an approved root may be connected; non-Git projects always have commit and push disabled.
 - Do not configure a disk root, a user home directory, or another broad private folder as a discovery root.
 - Commit and push permissions are separate and disabled by schema defaults.
 - Push is restricted to configured remotes and optional branches and never uses force.

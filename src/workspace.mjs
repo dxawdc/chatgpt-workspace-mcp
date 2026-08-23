@@ -15,6 +15,29 @@ import { runProcess } from "./process.mjs";
 const TEXT_PREVIEW_LIMIT = 500;
 const DEFAULT_IGNORE_NAMES = ["node_modules", ".git", "dist", "build", "coverage", ".next", ".cache"];
 const DISCOVERY_IGNORE_NAMES = new Set([".git", "node_modules", "dist", "build", "coverage", ".next", ".cache"]);
+const PROJECT_MARKER_NAMES = new Set([
+  "package.json",
+  "pyproject.toml",
+  "requirements.txt",
+  "setup.py",
+  "setup.cfg",
+  "Pipfile",
+  "poetry.lock",
+  "Cargo.toml",
+  "go.mod",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "settings.gradle",
+  "settings.gradle.kts",
+  "composer.json",
+  "Gemfile",
+  "mix.exs",
+  "Package.swift",
+  "Makefile",
+  "CMakeLists.txt",
+]);
+const PROJECT_MARKER_EXTENSIONS = [".sln", ".csproj", ".fsproj", ".vbproj", ".xcodeproj"];
 
 function sha256(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
@@ -23,6 +46,11 @@ function sha256(buffer) {
 function isInside(root, candidate) {
   const relative = path.relative(root, candidate);
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
+}
+
+function pathKey(value) {
+  const resolved = path.resolve(value);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
 }
 
 function validateRelativePath(relativePath, { allowRoot = false } = {}) {
@@ -56,13 +84,15 @@ function projectIdFromPath(root) {
   return normalized || "project";
 }
 
-async function hasGitMarker(root) {
-  try {
-    await fs.lstat(path.join(root, ".git"));
-    return true;
-  } catch {
-    return false;
-  }
+function detectedProjectMarkers(entries) {
+  return entries
+    .map((entry) => entry.name)
+    .filter(
+      (name) =>
+        PROJECT_MARKER_NAMES.has(name) ||
+        PROJECT_MARKER_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension)),
+    )
+    .sort((a, b) => a.localeCompare(b));
 }
 
 async function detectedProjectTasks(root) {
@@ -102,6 +132,14 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
     const root = await fs.realpath(project.root);
     const stat = await fs.stat(root);
     if (!stat.isDirectory()) throw new Error(`Configured root is not a directory: ${project.id}`);
+    return root;
+  }
+
+  async function getGitRoot(project) {
+    const root = await getRoot(project);
+    if (!(await isGitProjectRoot(root))) {
+      throw new Error(`Project ${project.id} is not a Git repository; Git tools are unavailable.`);
+    }
     return root;
   }
 
@@ -156,8 +194,9 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
     if (!roots.some((root) => isInside(root, real))) {
       throw new Error("Project is outside the locally approved discovery roots. Add its parent with quick-setup first.");
     }
-    if (!(await isGitProjectRoot(real))) throw new Error("Only Git project roots can be connected from ChatGPT.");
-    return real;
+    const stat = await fs.stat(real);
+    if (!stat.isDirectory()) throw new Error("Project path must be an existing directory.");
+    return { root: real, projectType: (await isGitProjectRoot(real)) ? "git" : "non-git" };
   }
 
   async function assertGitIdentity(root) {
@@ -233,6 +272,10 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
         discoveryRoots: config.discoveryRoots.length,
         arbitraryShell: false,
         guardedDeleteTool: true,
+        gitProjects: config.projects.filter(
+          (project) => project.projectType === "git" || (!project.projectType && (project.git.allowCommit || project.git.allowPush)),
+        ).length,
+        nonGitProjects: config.projects.filter((project) => project.projectType === "non-git").length,
         commitProjects: config.projects.filter((project) => project.git.allowCommit).length,
         pushProjects: config.projects.filter((project) => project.git.allowPush).length,
       };
@@ -244,6 +287,8 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
           id: project.id,
           label: project.label || project.id,
           root: project.root,
+          projectType:
+            project.projectType || (project.git.allowCommit || project.git.allowPush ? "git" : "unknown"),
           writable: project.writable,
           tasks: Object.keys(project.tasks),
           git: project.git,
@@ -251,9 +296,9 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
       };
     },
 
-    async discoverProjects({ maxDepth = 4, maxProjects = 100, maxDirectories = 5000 } = {}) {
+    async discoverProjects({ includeNonGit = true, maxDepth = 4, maxProjects = 100, maxDirectories = 5000 } = {}) {
       const roots = await discoveryRootPaths();
-      const authorizedRoots = new Map(config.projects.map((project) => [path.resolve(project.root), project.id]));
+      const authorizedRoots = new Map(config.projects.map((project) => [pathKey(project.root), project.id]));
       const discovered = [];
       let scannedDirectories = 0;
       let truncated = false;
@@ -262,15 +307,21 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
         while (queue.length && discovered.length < maxProjects && scannedDirectories < maxDirectories) {
           const current = queue.shift();
           scannedDirectories += 1;
-          if ((await hasGitMarker(current.absolute)) && (await isGitProjectRoot(current.absolute))) {
+          const children = await fs.readdir(current.absolute, { withFileTypes: true });
+          const hasGitMarker = children.some((child) => child.name === ".git");
+          const gitRoot = hasGitMarker && (await isGitProjectRoot(current.absolute));
+          const markers = gitRoot ? [] : detectedProjectMarkers(children);
+          const authorizedProjectId = authorizedRoots.get(pathKey(current.absolute)) || null;
+          if (gitRoot || (includeNonGit && (markers.length > 0 || authorizedProjectId))) {
             discovered.push({
               path: current.absolute,
               suggestedId: projectIdFromPath(current.absolute),
-              authorizedProjectId: authorizedRoots.get(path.resolve(current.absolute)) || null,
+              projectType: gitRoot ? "git" : "non-git",
+              markers,
+              authorizedProjectId,
             });
           }
           if (current.depth >= maxDepth) continue;
-          const children = await fs.readdir(current.absolute, { withFileTypes: true });
           for (const child of children) {
             if (!child.isDirectory() || child.isSymbolicLink() || DISCOVERY_IGNORE_NAMES.has(child.name)) continue;
             queue.push({ absolute: path.join(current.absolute, child.name), depth: current.depth + 1 });
@@ -282,15 +333,47 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
         discoveryRoots: roots,
         projects: discovered,
         scannedDirectories,
+        includesNonGit: includeNonGit,
         truncated,
       };
     },
 
     async connectProject({ projectPath, projectId, label, writable = true, allowCommit = true }) {
-      const root = await resolveDiscoverableProject(projectPath);
-      if (writable && allowCommit) await assertGitIdentity(root);
-      const existing = config.projects.find((project) => path.resolve(project.root) === path.resolve(root));
-      if (existing) return { connected: false, alreadyAuthorized: true, project: existing };
+      const { root, projectType } = await resolveDiscoverableProject(projectPath);
+      const effectiveAllowCommit = projectType === "git" && writable && allowCommit;
+      if (effectiveAllowCommit) await assertGitIdentity(root);
+      const existing = config.projects.find((project) => pathKey(project.root) === pathKey(root));
+      if (existing) {
+        const previousProjectType = existing.projectType;
+        const previousAllowCommit = existing.git.allowCommit;
+        const previousAllowPush = existing.git.allowPush;
+        let changed = false;
+        if (existing.projectType !== projectType) {
+          existing.projectType = projectType;
+          changed = true;
+        }
+        if (projectType === "non-git" && (existing.git.allowCommit || existing.git.allowPush)) {
+          existing.git.allowCommit = false;
+          existing.git.allowPush = false;
+          changed = true;
+        }
+        if (changed) {
+          try {
+            await persist();
+          } catch (error) {
+            existing.projectType = previousProjectType;
+            existing.git.allowCommit = previousAllowCommit;
+            existing.git.allowPush = previousAllowPush;
+            throw error;
+          }
+        }
+        return {
+          connected: false,
+          alreadyAuthorized: true,
+          project: existing,
+          gitPermissionsDisabled: projectType === "non-git",
+        };
+      }
       const baseId = projectId || projectIdFromPath(root);
       let id = baseId;
       let suffix = 2;
@@ -303,11 +386,12 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
         id,
         label: label || path.basename(root),
         root,
+        projectType,
         writable,
         ignoreNames: [...DEFAULT_IGNORE_NAMES],
         tasks: await detectedProjectTasks(root),
         git: {
-          allowCommit: writable && allowCommit,
+          allowCommit: effectiveAllowCommit,
           allowPush: false,
           allowedRemotes: ["origin"],
           allowedBranches: [],
@@ -322,7 +406,12 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
         config.projects.splice(config.projects.indexOf(project), 1);
         throw error;
       }
-      return { connected: true, alreadyAuthorized: false, project };
+      return {
+        connected: true,
+        alreadyAuthorized: false,
+        project,
+        gitPermissionsDisabled: projectType === "non-git",
+      };
     },
 
     async disconnectProject({ projectId }) {
@@ -464,20 +553,20 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
 
     async gitStatus({ projectId }) {
       const project = getProject(projectId);
-      const root = await getRoot(project);
+      const root = await getGitRoot(project);
       return gitStatusSnapshot(root, config.limits.maxCommandOutputBytes);
     },
 
     async gitDiff({ projectId, staged = false }) {
       const project = getProject(projectId);
-      const root = await getRoot(project);
+      const root = await getGitRoot(project);
       return gitDiffSnapshot(root, staged, config.limits.maxCommandOutputBytes);
     },
 
     async gitUnstage({ projectId, paths, expectedStatusSha256 }) {
       const project = getProject(projectId);
       assertCommitAllowed(project);
-      const root = await getRoot(project);
+      const root = await getGitRoot(project);
       return gitUnstage({
         root,
         paths,
@@ -489,7 +578,7 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
     async gitCommit({ projectId, paths, message, expectedStatusSha256 }) {
       const project = getProject(projectId);
       assertCommitAllowed(project);
-      const root = await getRoot(project);
+      const root = await getGitRoot(project);
       return gitCommit({
         root,
         paths,
@@ -502,7 +591,7 @@ export function createWorkspaceService(config, { persistConfig } = {}) {
     async gitPush({ projectId, remote = "origin", expectedCommitSha }) {
       const project = getProject(projectId);
       assertPushAllowed(project);
-      const root = await getRoot(project);
+      const root = await getGitRoot(project);
       return gitPush({
         root,
         remote,

@@ -31,10 +31,10 @@ function register(server, name, definition, handler) {
 const config = await loadConfig();
 const service = createWorkspaceService(config, { persistConfig: (nextConfig) => saveConfig(nextConfig) });
 const server = new McpServer(
-  { name: "secure-local-workspace-mcp", version: "0.2.0" },
+  { name: "secure-local-workspace-mcp", version: "0.3.0" },
   {
     instructions:
-      "Work only with authorized projects or projects discovered beneath locally approved discovery roots. Read a file immediately before editing or deleting and pass its sha256. Preserve unrelated changes. Before git_commit, call git_status and git_diff, pass the latest statusSha256, and list only intended paths. Commit and push are separate actions; never imply a push occurred unless git_push succeeds. This server has no arbitrary shell, force-push, history rewrite, or deploy tools.",
+      "Work only with authorized projects or projects discovered beneath locally approved discovery roots. Both Git and non-Git projects are supported; never call Git tools for a project whose projectType is non-git. Read a file immediately before editing or deleting and pass its sha256. Preserve unrelated changes. Before git_commit, call git_status and git_diff, pass the latest statusSha256, and list only intended paths. Commit and push are separate actions; never imply a push occurred unless git_push succeeds. This server has no arbitrary shell, force-push, history rewrite, or deploy tools.",
   },
 );
 
@@ -66,9 +66,11 @@ register(
   server,
   "discover_projects",
   {
-    title: "Discover local Git projects",
-    description: "Find Git repositories only beneath parent folders that the user approved locally during setup.",
+    title: "Discover local projects",
+    description:
+      "Find Git repositories and common non-Git project folders only beneath parent folders that the user approved locally during setup.",
     inputSchema: {
+      includeNonGit: z.boolean().default(true),
       maxDepth: z.number().int().min(0).max(8).default(4),
       maxProjects: z.number().int().min(1).max(500).default(100),
       maxDirectories: z.number().int().min(1).max(20000).default(5000),
@@ -82,15 +84,15 @@ register(
   server,
   "connect_project",
   {
-    title: "Connect a discovered local project",
+    title: "Connect a local project",
     description:
-      "Authorize one discovered Git project for this MCP. The path must be under a locally approved discovery root. Push remains disabled.",
+      "Authorize one directory beneath a locally approved discovery root. Non-Git projects can be edited, but commit and push are automatically disabled.",
     inputSchema: {
       projectPath: z.string().min(1),
       projectId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/).optional(),
       label: z.string().min(1).max(120).optional(),
       writable: z.boolean().default(true),
-      allowCommit: z.boolean().default(true),
+      allowCommit: z.boolean().default(true).describe("Applied only when the selected directory is a Git root."),
     },
     annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
   },

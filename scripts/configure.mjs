@@ -94,15 +94,22 @@ async function addProject(config, args) {
   );
   const id = uniqueId(config, requestedId, existing);
   const gitRoot = await isGitProjectRoot(root);
+  const projectType = gitRoot ? "git" : "non-git";
+  if (!gitRoot && (has(args, "--allow-commit") || has(args, "--allow-push"))) {
+    throw new Error("Commit or push was requested, but --root is not a Git project root.");
+  }
   const project = existing || {
     id,
     label: valueFor(args, "--label") || path.basename(root),
     root,
+    projectType,
     writable: false,
     ignoreNames: [...DEFAULT_IGNORES],
     tasks: await detectedTasks(root),
     git: { allowCommit: false, allowPush: false, allowedRemotes: ["origin"], allowedBranches: [] },
   };
+
+  project.projectType = projectType;
 
   if (existing && Object.keys(project.tasks).length === 0) {
     project.tasks = await detectedTasks(root);
@@ -122,8 +129,9 @@ async function addProject(config, args) {
   if (branches.length) project.git.allowedBranches = [...new Set(branches)];
   if (ignoreNames.length) project.ignoreNames = [...new Set(ignoreNames)];
 
-  if ((project.git.allowCommit || project.git.allowPush) && !gitRoot) {
-    throw new Error("Commit or push was requested, but --root is not a Git project root.");
+  if (!gitRoot) {
+    project.git.allowCommit = false;
+    project.git.allowPush = false;
   }
   if (project.git.allowCommit && !project.writable) {
     throw new Error("Commit requires a writable project. Add --writable or disable commit.");
@@ -134,7 +142,7 @@ async function addProject(config, args) {
 
   if (!existing) config.projects.push(project);
   await saveConfig(config);
-  return { changed: true, project, configPath: config.configPath, detectedGitRoot: gitRoot };
+  return { changed: true, project, configPath: config.configPath, detectedGitRoot: gitRoot, projectType };
 }
 
 function usage() {
@@ -166,10 +174,11 @@ else if (command === "list") {
   output = {
     configPath: config.configPath,
     discoveryRoots: config.discoveryRoots,
-    projects: config.projects.map(({ id, label, root, writable, git, tasks }) => ({
+    projects: config.projects.map(({ id, label, root, projectType, writable, git, tasks }) => ({
       id,
       label,
       root,
+      projectType: projectType || "unknown",
       writable,
       git,
       tasks: Object.keys(tasks),

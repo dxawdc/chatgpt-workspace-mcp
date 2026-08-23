@@ -4,6 +4,7 @@
       "id": "my-app",
       "label": "My application",
       "root": "D:\\Projects\\my-app",
+      "projectType": "git",
       "writable": true,
       "ignoreNames": ["node_modules", ".git", "dist", "build", "coverage"],
       "tasks": {

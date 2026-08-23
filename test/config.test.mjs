@@ -24,16 +24,18 @@ test("fills safe Git defaults and persists configuration updates", async (t) => 
   const configPath = path.join(root, "config.json");
   await writeFile(
     configPath,
-    JSON.stringify({ projects: [{ id: "project", root: projectRoot, writable: true }] }),
+    JSON.stringify({ projects: [{ id: "project", root: projectRoot, projectType: "git", writable: true }] }),
     "utf8",
   );
   const config = await loadConfig(configPath);
   assert.equal(config.projects[0].git.allowCommit, false);
   assert.equal(config.projects[0].git.allowPush, false);
+  assert.equal(config.projects[0].projectType, "git");
   config.discoveryRoots.push(root);
   config.projects[0].git.allowCommit = true;
   await saveConfig(config);
   const reloaded = await loadConfig(configPath);
   assert.equal(reloaded.projects[0].git.allowCommit, true);
+  assert.equal(reloaded.projects[0].projectType, "git");
   assert.deepEqual(reloaded.discoveryRoots, [path.resolve(root)]);
 });

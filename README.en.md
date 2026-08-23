@@ -2,7 +2,7 @@
 
 [中文](README.md) | English
 
-Connect ChatGPT or Codex to locally approved Git projects without exposing an arbitrary shell. Discover repositories under trusted parent folders, inspect and edit files, run allowlisted tasks, create guarded commits for explicit paths, and optionally push to allowlisted remotes and branches.
+Connect ChatGPT or Codex to locally approved projects without exposing an arbitrary shell. Discover Git repositories and common non-Git projects under trusted parent folders, inspect and edit files, run allowlisted tasks, and use guarded commit or controlled push only when the selected project is a Git root.
 
 ## Fast setup on Windows
 
@@ -16,7 +16,7 @@ Set-Location .\secure-local-workspace-mcp
   -RestartTunnel
 ```
 
-The script installs locked dependencies, runs tests, authorizes the selected project for editing and local commits, detects common npm tasks, approves a parent folder for project discovery, and restarts an existing Tunnel runtime. Push is disabled by default.
+The script installs locked dependencies, runs tests, authorizes the selected project, detects common npm tasks, approves a parent folder for project discovery, and restarts an existing Tunnel runtime. Push is disabled by default; commit and push are automatically disabled for non-Git projects.
 
 For a first-time Secure MCP Tunnel setup:
 
@@ -36,6 +36,7 @@ Creating the Tunnel, generating its Runtime API Key, downloading the official cl
 ## Safety model
 
 - Projects can be connected from ChatGPT only beneath locally approved discovery roots.
+- Common non-Git projects are discoverable, and any explicit directory beneath an approved root can be connected with Git permissions forced off.
 - Existing-file edits and deletes require the latest SHA-256 returned by `read_file`.
 - Tasks are fixed command-and-argument allowlists.
 - Commits require an unchanged reviewed status hash and explicit relative paths.

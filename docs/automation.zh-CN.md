@@ -137,7 +137,7 @@ Set-Location $RepositoryRoot
   -RestartTunnel
 ```
 
-之后 ChatGPT 可通过 `discover_projects` 查看该目录内的 Git 项目，并在用户批准工具调用后使用 `connect_project` 接入单个项目。发现过程默认限制深度、项目数和扫描目录数，不跟随目录符号链接。
+之后 ChatGPT 可通过 `discover_projects` 查看该目录内的 Git 仓库和带常见工程标识的非 Git 项目，并在用户批准工具调用后使用 `connect_project` 接入单个目录。没有工程标识的普通目录也可以通过已批准范围内的明确绝对路径接入。非 Git 项目会自动强制关闭 commit 和 push。发现过程默认限制深度、项目数和扫描目录数，不跟随目录符号链接。
 
 不要批准磁盘根目录、用户主目录或包含大量隐私文件的目录。
 
