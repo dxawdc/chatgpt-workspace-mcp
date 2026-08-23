@@ -1,11 +1,20 @@
 import { createHash } from "node:crypto";
-import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { applyPatch as applyUnifiedPatch } from "diff";
+import {
+  gitCommit,
+  gitDiffSnapshot,
+  gitPush,
+  gitStatusSnapshot,
+  gitUnstage,
+  isGitProjectRoot,
+} from "./git.mjs";
 import { runProcess } from "./process.mjs";
 
 const TEXT_PREVIEW_LIMIT = 500;
+const DEFAULT_IGNORE_NAMES = ["node_modules", ".git", "dist", "build", "coverage", ".next", ".cache"];
+const DISCOVERY_IGNORE_NAMES = new Set([".git", "node_modules", "dist", "build", "coverage", ".next", ".cache"]);
 
 function sha256(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
@@ -37,8 +46,51 @@ function normalizeExtensions(extensions) {
   return new Set(extensions.map((value) => (value.startsWith(".") ? value : `.${value}`).toLowerCase()));
 }
 
-export function createWorkspaceService(config) {
+function projectIdFromPath(root) {
+  const normalized = path
+    .basename(root)
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  return normalized || "project";
+}
+
+async function hasGitMarker(root) {
+  try {
+    await fs.lstat(path.join(root, ".git"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function detectedProjectTasks(root) {
+  try {
+    const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
+    const command = process.platform === "win32" ? "npm.cmd" : "npm";
+    const tasks = {};
+    for (const taskName of ["test", "lint", "build", "typecheck"]) {
+      if (!packageJson.scripts?.[taskName]) continue;
+      tasks[taskName] = {
+        command,
+        args: taskName === "test" ? ["test"] : ["run", taskName],
+        timeoutSeconds: taskName === "build" ? 600 : 300,
+      };
+    }
+    return tasks;
+  } catch {
+    return {};
+  }
+}
+
+export function createWorkspaceService(config, { persistConfig } = {}) {
   const projects = new Map(config.projects.map((project) => [project.id, project]));
+
+  async function persist() {
+    if (!persistConfig) throw new Error("Configuration updates are unavailable in this runtime.");
+    await persistConfig(config);
+  }
 
   function getProject(projectId) {
     const project = projects.get(projectId);
@@ -75,6 +127,59 @@ export function createWorkspaceService(config) {
 
   function assertWritable(project) {
     if (!project.writable) throw new Error(`Project ${project.id} is configured as read-only.`);
+  }
+
+  function assertCommitAllowed(project) {
+    assertWritable(project);
+    if (!project.git.allowCommit) throw new Error(`Git commits are not enabled for project ${project.id}.`);
+  }
+
+  function assertPushAllowed(project) {
+    if (!project.git.allowPush) throw new Error(`Git push is not enabled for project ${project.id}.`);
+  }
+
+  async function discoveryRootPaths() {
+    const roots = [];
+    for (const configuredRoot of config.discoveryRoots) {
+      const real = await fs.realpath(configuredRoot);
+      const stat = await fs.stat(real);
+      if (!stat.isDirectory()) throw new Error(`Discovery root is not a directory: ${configuredRoot}`);
+      roots.push(real);
+    }
+    return roots;
+  }
+
+  async function resolveDiscoverableProject(candidate) {
+    if (!path.isAbsolute(candidate)) throw new Error("Project discovery paths must be absolute.");
+    const real = await fs.realpath(candidate);
+    const roots = await discoveryRootPaths();
+    if (!roots.some((root) => isInside(root, real))) {
+      throw new Error("Project is outside the locally approved discovery roots. Add its parent with quick-setup first.");
+    }
+    if (!(await isGitProjectRoot(real))) throw new Error("Only Git project roots can be connected from ChatGPT.");
+    return real;
+  }
+
+  async function assertGitIdentity(root) {
+    const [name, email] = await Promise.all([
+      runProcess({
+        command: "git",
+        args: ["config", "user.name"],
+        cwd: root,
+        timeoutSeconds: 15,
+        maxOutputBytes: 4096,
+      }),
+      runProcess({
+        command: "git",
+        args: ["config", "user.email"],
+        cwd: root,
+        timeoutSeconds: 15,
+        maxOutputBytes: 4096,
+      }),
+    ]);
+    if (name.exitCode !== 0 || email.exitCode !== 0 || !name.stdout.trim() || !email.stdout.trim()) {
+      throw new Error("Git user.name and user.email must be configured locally before enabling commit.");
+    }
   }
 
   async function readText(project, relativePath) {
@@ -125,10 +230,11 @@ export function createWorkspaceService(config) {
         configPath: config.configPath,
         authorizedProjects: config.projects.length,
         writableProjects: config.projects.filter((project) => project.writable).length,
+        discoveryRoots: config.discoveryRoots.length,
         arbitraryShell: false,
-        deleteTool: false,
-        commitTool: false,
-        pushTool: false,
+        guardedDeleteTool: true,
+        commitProjects: config.projects.filter((project) => project.git.allowCommit).length,
+        pushProjects: config.projects.filter((project) => project.git.allowPush).length,
       };
     },
 
@@ -137,10 +243,101 @@ export function createWorkspaceService(config) {
         projects: config.projects.map((project) => ({
           id: project.id,
           label: project.label || project.id,
+          root: project.root,
           writable: project.writable,
           tasks: Object.keys(project.tasks),
+          git: project.git,
         })),
       };
+    },
+
+    async discoverProjects({ maxDepth = 4, maxProjects = 100, maxDirectories = 5000 } = {}) {
+      const roots = await discoveryRootPaths();
+      const authorizedRoots = new Map(config.projects.map((project) => [path.resolve(project.root), project.id]));
+      const discovered = [];
+      let scannedDirectories = 0;
+      let truncated = false;
+      for (const discoveryRoot of roots) {
+        const queue = [{ absolute: discoveryRoot, depth: 0 }];
+        while (queue.length && discovered.length < maxProjects && scannedDirectories < maxDirectories) {
+          const current = queue.shift();
+          scannedDirectories += 1;
+          if ((await hasGitMarker(current.absolute)) && (await isGitProjectRoot(current.absolute))) {
+            discovered.push({
+              path: current.absolute,
+              suggestedId: projectIdFromPath(current.absolute),
+              authorizedProjectId: authorizedRoots.get(path.resolve(current.absolute)) || null,
+            });
+          }
+          if (current.depth >= maxDepth) continue;
+          const children = await fs.readdir(current.absolute, { withFileTypes: true });
+          for (const child of children) {
+            if (!child.isDirectory() || child.isSymbolicLink() || DISCOVERY_IGNORE_NAMES.has(child.name)) continue;
+            queue.push({ absolute: path.join(current.absolute, child.name), depth: current.depth + 1 });
+          }
+        }
+        if (queue.length || discovered.length >= maxProjects || scannedDirectories >= maxDirectories) truncated = true;
+      }
+      return {
+        discoveryRoots: roots,
+        projects: discovered,
+        scannedDirectories,
+        truncated,
+      };
+    },
+
+    async connectProject({ projectPath, projectId, label, writable = true, allowCommit = true }) {
+      const root = await resolveDiscoverableProject(projectPath);
+      if (writable && allowCommit) await assertGitIdentity(root);
+      const existing = config.projects.find((project) => path.resolve(project.root) === path.resolve(root));
+      if (existing) return { connected: false, alreadyAuthorized: true, project: existing };
+      const baseId = projectId || projectIdFromPath(root);
+      let id = baseId;
+      let suffix = 2;
+      while (projects.has(id)) {
+        const suffixText = `-${suffix}`;
+        id = `${baseId.slice(0, 64 - suffixText.length)}${suffixText}`;
+        suffix += 1;
+      }
+      const project = {
+        id,
+        label: label || path.basename(root),
+        root,
+        writable,
+        ignoreNames: [...DEFAULT_IGNORE_NAMES],
+        tasks: await detectedProjectTasks(root),
+        git: {
+          allowCommit: writable && allowCommit,
+          allowPush: false,
+          allowedRemotes: ["origin"],
+          allowedBranches: [],
+        },
+      };
+      config.projects.push(project);
+      projects.set(id, project);
+      try {
+        await persist();
+      } catch (error) {
+        projects.delete(id);
+        config.projects.splice(config.projects.indexOf(project), 1);
+        throw error;
+      }
+      return { connected: true, alreadyAuthorized: false, project };
+    },
+
+    async disconnectProject({ projectId }) {
+      const project = getProject(projectId);
+      const index = config.projects.indexOf(project);
+      config.projects.splice(index, 1);
+      projects.delete(projectId);
+      try {
+        await persist();
+      } catch (error) {
+        config.projects.splice(index, 0, project);
+        projects.set(projectId, project);
+        throw error;
+      }
+      return { disconnected: true, projectId, filesDeleted: false };
     },
 
     async listFiles({ projectId, pathPrefix = ".", maxDepth = 4, maxEntries = 500 }) {
@@ -252,28 +449,66 @@ export function createWorkspaceService(config) {
       };
     },
 
+    async deleteTextFile({ projectId, path: relativePath, expectedSha256 }) {
+      const project = getProject(projectId);
+      assertWritable(project);
+      const file = await readText(project, relativePath);
+      if (file.hash !== expectedSha256) {
+        throw new Error(`File changed since it was read. Expected ${expectedSha256}, current ${file.hash}.`);
+      }
+      const current = await fs.readFile(file.absolute);
+      if (sha256(current) !== expectedSha256) throw new Error("File changed during delete validation; nothing was deleted.");
+      await fs.unlink(file.absolute);
+      return { projectId, path: file.relative, deleted: true, previousSha256: expectedSha256 };
+    },
+
     async gitStatus({ projectId }) {
       const project = getProject(projectId);
       const root = await getRoot(project);
-      return runProcess({
-        command: "git",
-        args: ["status", "--short", "--branch"],
-        cwd: root,
-        timeoutSeconds: 30,
-        maxOutputBytes: config.limits.maxCommandOutputBytes,
-      });
+      return gitStatusSnapshot(root, config.limits.maxCommandOutputBytes);
     },
 
     async gitDiff({ projectId, staged = false }) {
       const project = getProject(projectId);
       const root = await getRoot(project);
-      const args = ["diff", "--no-ext-diff", "--no-color"];
-      if (staged) args.push("--cached");
-      return runProcess({
-        command: "git",
-        args,
-        cwd: root,
-        timeoutSeconds: 60,
+      return gitDiffSnapshot(root, staged, config.limits.maxCommandOutputBytes);
+    },
+
+    async gitUnstage({ projectId, paths, expectedStatusSha256 }) {
+      const project = getProject(projectId);
+      assertCommitAllowed(project);
+      const root = await getRoot(project);
+      return gitUnstage({
+        root,
+        paths,
+        expectedStatusSha256,
+        maxOutputBytes: config.limits.maxCommandOutputBytes,
+      });
+    },
+
+    async gitCommit({ projectId, paths, message, expectedStatusSha256 }) {
+      const project = getProject(projectId);
+      assertCommitAllowed(project);
+      const root = await getRoot(project);
+      return gitCommit({
+        root,
+        paths,
+        message,
+        expectedStatusSha256,
+        maxOutputBytes: config.limits.maxCommandOutputBytes,
+      });
+    },
+
+    async gitPush({ projectId, remote = "origin", expectedCommitSha }) {
+      const project = getProject(projectId);
+      assertPushAllowed(project);
+      const root = await getRoot(project);
+      return gitPush({
+        root,
+        remote,
+        expectedCommitSha,
+        allowedRemotes: project.git.allowedRemotes,
+        allowedBranches: project.git.allowedBranches,
         maxOutputBytes: config.limits.maxCommandOutputBytes,
       });
     },

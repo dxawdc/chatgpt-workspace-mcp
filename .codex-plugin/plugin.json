@@ -1,7 +1,7 @@
 {
   "name": "local-project-workspace",
-  "version": "0.1.0+codex.20260823113816",
-  "description": "Securely read, search, edit, test, and review explicitly authorized local projects through MCP.",
+  "version": "0.2.0+codex.20260823141416",
+  "description": "Discover approved local projects, safely edit and test them, and create guarded Git commits through MCP.",
   "author": {
     "name": "Secure Local Workspace MCP contributors"
   },
@@ -17,19 +17,20 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Secure Local Workspace MCP",
-    "shortDescription": "\u5b89\u5168\u8fde\u63a5 AI \u4e0e\u660e\u786e\u6388\u6743\u7684\u672c\u5730\u9879\u76ee\u76ee\u5f55\u3002",
-    "longDescription": "\u901a\u8fc7\u5b89\u5168\u8fb9\u754c\u660e\u786e\u7684 MCP \u670d\u52a1\uff0c\u5c06 ChatGPT \u6216 Codex \u8fde\u63a5\u5230\u9009\u5b9a\u7684\u672c\u5730\u9879\u76ee\u3002\u652f\u6301\u8bfb\u53d6\u3001\u641c\u7d22\u3001SHA-256 \u4fdd\u62a4\u7684\u8865\u4e01\u4fee\u6539\u3001\u767d\u540d\u5355\u4efb\u52a1\u4e0e Git \u68c0\u67e5\uff0c\u4e0d\u66b4\u9732\u4efb\u610f Shell\u3002",
+    "shortDescription": "\u4ece ChatGPT \u5b89\u5168\u67e5\u770b\u3001\u4fee\u6539\u548c\u63d0\u4ea4\u672c\u5730\u9879\u76ee\u3002",
+    "longDescription": "\u901a\u8fc7 Secure MCP Tunnel \u5c06 ChatGPT \u6216 Codex \u8fde\u63a5\u5230\u672c\u5730\u6279\u51c6\u7684\u9879\u76ee\u5e93\u3002\u652f\u6301\u9879\u76ee\u53d1\u73b0\u3001SHA-256 \u4fdd\u62a4\u7684\u4fee\u6539\u4e0e\u5220\u9664\u3001\u767d\u540d\u5355\u4efb\u52a1\u3001\u663e\u5f0f\u8def\u5f84\u63d0\u4ea4\u3001\u654f\u611f\u5185\u5bb9\u626b\u63cf\u548c\u53ef\u9009\u53d7\u63a7\u63a8\u9001\uff0c\u4e0d\u66b4\u9732\u4efb\u610f Shell \u6216\u5f3a\u5236\u63a8\u9001\u3002",
     "developerName": "Secure Local Workspace MCP contributors",
     "category": "Developer Tools",
     "capabilities": [
       "Local files",
       "Code editing",
       "Testing",
-      "Git review"
+      "Git commit",
+      "Controlled Git push"
     ],
     "defaultPrompt": [
       "List the local projects I have authorized.",
-      "Inspect a project, make the requested change, run its tests, and show the diff.",
+      "Discover an approved project, make the requested change, run its tests, show the diff, and commit only selected files.",
       "Search an authorized project for the code related to this bug."
     ]
   },

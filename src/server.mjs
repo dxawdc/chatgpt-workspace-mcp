@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { loadConfig } from "./config.mjs";
+import { loadConfig, saveConfig } from "./config.mjs";
 import { createWorkspaceService } from "./workspace.mjs";
 
 function result(data, summary) {
@@ -29,12 +29,12 @@ function register(server, name, definition, handler) {
 }
 
 const config = await loadConfig();
-const service = createWorkspaceService(config);
+const service = createWorkspaceService(config, { persistConfig: (nextConfig) => saveConfig(nextConfig) });
 const server = new McpServer(
-  { name: "secure-local-workspace-mcp", version: "0.1.0" },
+  { name: "secure-local-workspace-mcp", version: "0.2.0" },
   {
     instructions:
-      "Work only with configured project IDs. Read a file immediately before editing and pass its sha256 to apply_patch. After edits, inspect git_diff and run only configured tasks. Preserve unrelated changes. This server has no arbitrary shell, delete, commit, push, or deploy tools.",
+      "Work only with authorized projects or projects discovered beneath locally approved discovery roots. Read a file immediately before editing or deleting and pass its sha256. Preserve unrelated changes. Before git_commit, call git_status and git_diff, pass the latest statusSha256, and list only intended paths. Commit and push are separate actions; never imply a push occurred unless git_push succeeds. This server has no arbitrary shell, force-push, history rewrite, or deploy tools.",
   },
 );
 
@@ -60,6 +60,53 @@ register(
     annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   },
   async () => result(service.listProjects()),
+);
+
+register(
+  server,
+  "discover_projects",
+  {
+    title: "Discover local Git projects",
+    description: "Find Git repositories only beneath parent folders that the user approved locally during setup.",
+    inputSchema: {
+      maxDepth: z.number().int().min(0).max(8).default(4),
+      maxProjects: z.number().int().min(1).max(500).default(100),
+      maxDirectories: z.number().int().min(1).max(20000).default(5000),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
+  },
+  async (input) => result(await service.discoverProjects(input)),
+);
+
+register(
+  server,
+  "connect_project",
+  {
+    title: "Connect a discovered local project",
+    description:
+      "Authorize one discovered Git project for this MCP. The path must be under a locally approved discovery root. Push remains disabled.",
+    inputSchema: {
+      projectPath: z.string().min(1),
+      projectId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/).optional(),
+      label: z.string().min(1).max(120).optional(),
+      writable: z.boolean().default(true),
+      allowCommit: z.boolean().default(true),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
+  },
+  async (input) => result(await service.connectProject(input), "Project connected. Call list_projects before working."),
+);
+
+register(
+  server,
+  "disconnect_project",
+  {
+    title: "Disconnect an authorized project",
+    description: "Remove one project from the MCP authorization list without deleting any project files.",
+    inputSchema: { projectId: z.string() },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true },
+  },
+  async (input) => result(await service.disconnectProject(input), "Project disconnected. No project files were deleted."),
 );
 
 register(
@@ -150,6 +197,22 @@ register(
 
 register(
   server,
+  "delete_text_file",
+  {
+    title: "Delete a guarded text file",
+    description: "Delete one regular text file only after verifying the latest SHA-256 returned by read_file.",
+    inputSchema: {
+      projectId: z.string(),
+      path: z.string(),
+      expectedSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true },
+  },
+  async (input) => result(await service.deleteTextFile(input), "File deleted. Review git_diff before continuing."),
+);
+
+register(
+  server,
   "git_status",
   {
     title: "Show Git status",
@@ -170,6 +233,57 @@ register(
     annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   },
   async (input) => result(await service.gitDiff(input)),
+);
+
+register(
+  server,
+  "git_unstage",
+  {
+    title: "Unstage selected Git paths",
+    description: "Remove explicit paths from the Git index without changing their working-tree contents.",
+    inputSchema: {
+      projectId: z.string(),
+      paths: z.array(z.string().min(1)).min(1).max(100),
+      expectedStatusSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
+  },
+  async (input) => result(await service.gitUnstage(input), "Selected paths were unstaged; working files were not changed."),
+);
+
+register(
+  server,
+  "git_commit",
+  {
+    title: "Commit selected project changes",
+    description:
+      "Stage and commit only explicit relative paths after status review, concurrency validation, whitespace checks, and sensitive-content scanning.",
+    inputSchema: {
+      projectId: z.string(),
+      paths: z.array(z.string().min(1)).min(1).max(100),
+      message: z.string().min(1).max(4096),
+      expectedStatusSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
+  },
+  async (input) => result(await service.gitCommit(input), "Commit created locally. Nothing was pushed."),
+);
+
+register(
+  server,
+  "git_push",
+  {
+    title: "Push the current commit",
+    description:
+      "Push the reviewed current commit without force to an allowlisted remote and branch. This must be enabled locally per project.",
+    inputSchema: {
+      projectId: z.string(),
+      remote: z.string().regex(/^[A-Za-z0-9._-]+$/).default("origin"),
+      expectedCommitSha: z.string().regex(/^[a-f0-9]{40}$/),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: true, destructiveHint: false },
+  },
+  async (input) => result(await service.gitPush(input), "Current commit pushed to the configured remote."),
 );
 
 register(

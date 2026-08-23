@@ -17,9 +17,16 @@
           "args": ["run", "build"],
           "timeoutSeconds": 300
         }
+      },
+      "git": {
+        "allowCommit": true,
+        "allowPush": false,
+        "allowedRemotes": ["origin"],
+        "allowedBranches": []
       }
     }
   ],
+  "discoveryRoots": ["D:\\Projects"],
   "limits": {
     "maxReadBytes": 1048576,
     "maxReadLines": 1200,

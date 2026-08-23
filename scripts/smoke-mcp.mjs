@@ -13,12 +13,10 @@ const configPath = path.join(tempRoot, "config.json");
 await mkdir(path.join(projectRoot, "src"), { recursive: true });
 await writeFile(path.join(projectRoot, "src", "hello.js"), "export const greeting = 'hello';\n", "utf8");
 execFileSync("git", ["init"], { cwd: projectRoot, stdio: "ignore" });
+execFileSync("git", ["config", "user.name", "MCP Smoke"], { cwd: projectRoot, stdio: "ignore" });
+execFileSync("git", ["config", "user.email", "smoke@example.invalid"], { cwd: projectRoot, stdio: "ignore" });
 execFileSync("git", ["add", "."], { cwd: projectRoot, stdio: "ignore" });
-execFileSync(
-  "git",
-  ["-c", "user.name=MCP Smoke", "-c", "user.email=smoke@example.invalid", "commit", "-m", "initial"],
-  { cwd: projectRoot, stdio: "ignore" },
-);
+execFileSync("git", ["commit", "-m", "initial"], { cwd: projectRoot, stdio: "ignore" });
 await writeFile(
   configPath,
   JSON.stringify(
@@ -36,6 +34,12 @@ await writeFile(
               args: ["-e", "process.stdout.write('task-ok')"],
               timeoutSeconds: 10,
             },
+          },
+          git: {
+            allowCommit: true,
+            allowPush: false,
+            allowedRemotes: ["origin"],
+            allowedBranches: [],
           },
         },
       ],
@@ -61,13 +65,20 @@ try {
     for (const required of [
       "diagnostics",
       "list_projects",
+      "discover_projects",
+      "connect_project",
+      "disconnect_project",
       "list_files",
       "read_file",
       "search_text",
       "apply_patch",
       "create_text_file",
+      "delete_text_file",
       "git_status",
       "git_diff",
+      "git_unstage",
+      "git_commit",
+      "git_push",
       "run_task",
     ]) {
       assert(names.has(required), `Missing MCP tool: ${required}`);
@@ -102,7 +113,21 @@ try {
 
     const diff = await client.callTool({ name: "git_diff", arguments: { projectId: "smoke" } });
     assert.match(diff.structuredContent.stdout, /greeting = 'hi'/);
-    console.log(`MCP integration smoke test passed (${listed.tools.length} tools, guarded edit, task, Git diff).`);
+    const status = await client.callTool({ name: "git_status", arguments: { projectId: "smoke" } });
+    const commit = await client.callTool({
+      name: "git_commit",
+      arguments: {
+        projectId: "smoke",
+        paths: ["src/hello.js"],
+        message: "test: guarded MCP commit",
+        expectedStatusSha256: status.structuredContent.statusSha256,
+      },
+    });
+    assert.match(commit.structuredContent.commitSha, /^[a-f0-9]{40}$/);
+    assert.equal(commit.structuredContent.pushPerformed, false);
+    console.log(
+      `MCP integration smoke test passed (${listed.tools.length} tools, guarded edit, task, diff, and commit).`,
+    );
   } finally {
     await client.close();
   }

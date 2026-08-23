@@ -2,7 +2,7 @@
   "mcpServers": {
     "secure-local-workspace-mcp": {
       "title": "Secure Local Workspace MCP",
-      "description": "Safety-scoped access to explicitly allowed local projects.",
+      "description": "Discover approved local projects, safely edit files, run tasks, and create guarded Git commits.",
       "cwd": ".",
       "command": "node",
       "args": ["./src/server.mjs"]

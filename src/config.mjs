@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
@@ -9,6 +9,13 @@ const TaskSchema = z.object({
   args: z.array(z.string()).default([]),
   timeoutSeconds: z.number().int().min(1).max(1800).default(120),
   env: z.record(z.string(), z.string()).optional(),
+});
+
+const ProjectGitSchema = z.object({
+  allowCommit: z.boolean().default(false),
+  allowPush: z.boolean().default(false),
+  allowedRemotes: z.array(z.string().regex(/^[A-Za-z0-9._-]+$/)).default(["origin"]),
+  allowedBranches: z.array(z.string().min(1).max(255)).default([]),
 });
 
 const ProjectSchema = z.object({
@@ -24,6 +31,12 @@ const ProjectSchema = z.object({
     "coverage",
   ]),
   tasks: z.record(z.string(), TaskSchema).default({}),
+  git: ProjectGitSchema.default({
+    allowCommit: false,
+    allowPush: false,
+    allowedRemotes: ["origin"],
+    allowedBranches: [],
+  }),
 });
 
 const DEFAULT_LIMITS = {
@@ -48,6 +61,7 @@ const LimitsSchema = z.object({
 
 const ConfigSchema = z.object({
   projects: z.array(ProjectSchema).default([]),
+  discoveryRoots: z.array(z.string().min(1)).default([]),
   limits: LimitsSchema.default(DEFAULT_LIMITS),
 });
 
@@ -87,7 +101,32 @@ export async function loadConfig(configPath = defaultConfigPath()) {
     seen.add(project.id);
     project.root = path.resolve(project.root);
   }
+  config.discoveryRoots = config.discoveryRoots.map((root) => path.resolve(root));
   return { ...config, configPath };
 }
 
-export { ConfigSchema };
+export async function saveConfig(config, configPath = config.configPath || defaultConfigPath()) {
+  const parsed = ConfigSchema.parse({
+    projects: config.projects,
+    discoveryRoots: config.discoveryRoots,
+    limits: config.limits,
+  });
+  const resolvedPath = path.resolve(configPath);
+  await mkdir(path.dirname(resolvedPath), { recursive: true });
+  const temporaryPath = `${resolvedPath}.${process.pid}.${Date.now()}.tmp`;
+  const payload = `${JSON.stringify(parsed, null, 2)}\n`;
+  await writeFile(temporaryPath, payload, { encoding: "utf8", flag: "wx" });
+  try {
+    await rename(temporaryPath, resolvedPath);
+  } catch (error) {
+    try {
+      await rm(temporaryPath, { force: true });
+    } catch {
+      // Preserve the original write error.
+    }
+    throw error;
+  }
+  return resolvedPath;
+}
+
+export { ConfigSchema, ProjectGitSchema, ProjectSchema };

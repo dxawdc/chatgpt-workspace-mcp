@@ -1,226 +1,257 @@
 # Windows 自动化配置参考
 
-本文档提供可审计、可回滚的自动化配置流程。脚本不会创建 OpenAI 账号资源，也不会读取或输出 API Key 内容；Tunnel 创建、Runtime Key 创建以及 ChatGPT 风险确认仍需在官方界面完成。
+本文面向希望快速部署 Secure Local Workspace MCP 的 Windows 用户。自动化目标是减少 JSON 手工编辑和重复命令，同时保留账号、密钥、项目范围、commit 和 push 权限的人工控制。
 
 ## 自动化边界
 
-可以自动化：
+仓库脚本可以自动完成：
 
-- 安装 Node 依赖和运行测试；
-- 生成本地项目授权配置；
-- 使用已有 Tunnel ID 和 Runtime Key 引用生成 profile；
-- 运行 `doctor --explain`；
+- 安装锁定的 Node.js 依赖；
+- 运行单元测试和 MCP 冒烟测试；
+- 幂等增加或更新授权项目；
+- 自动识别常见 npm 任务；
+- 增加 ChatGPT 可发现项目的父目录；
+- 创建和检查已有 Tunnel ID 对应的 profile；
 - 注册当前用户登录自启动任务；
-- 通过 `healthz`、`readyz` 或 runtime status 验证状态。
+- 重启已有 runtime；
+- 按项目配置 commit、remote 和 branch 权限。
 
-不能由本仓库脚本自动化：
+以下操作必须由用户在官方界面或本机明确完成：
 
-- 代替用户登录 OpenAI；
-- 绕过验证码、MFA 或安全确认；
-- 创建、显示或上传 API Key；
-- 替用户接受 ChatGPT 第三方插件风险提示；
-- 自动扩大项目目录或写入权限。
+- 登录 OpenAI 并创建 Secure MCP Tunnel；
+- 创建、保存或撤销 Runtime API Key；
+- 下载并校验官方 `tunnel-client`；
+- 接受 ChatGPT 私有应用风险提示；
+- 决定哪些父目录可用于项目发现；
+- 决定哪些项目可写、可 commit 或可 push；
+- 设置真实 Git 作者身份。
 
-## 变量规划
+## 推荐目录
 
-在执行前明确以下值：
+```text
+源码仓库       D:\Tools\secure-local-workspace-mcp
+授权配置       %USERPROFILE%\.secure-local-workspace-mcp\config.json
+Tunnel profile %USERPROFILE%\.secure-local-workspace-mcp\tunnel-profiles\
+Runtime Key    C:\Secrets\openai-tunnel-runtime-key.txt
+项目父目录     D:\Projects\
+```
+
+不要把 Runtime Key、真实配置或 profile 放在源码仓库中。
+
+## 场景一：已有 Tunnel，一条命令接入项目
+
+```powershell
+Set-Location "D:\Tools\secure-local-workspace-mcp"
+
+.\scripts\quick-setup.ps1 `
+  -ProjectRoot "D:\Projects\my-app" `
+  -DiscoveryRoot "D:\Projects" `
+  -RestartTunnel
+```
+
+默认行为：
+
+- 项目可读写；
+- 允许本地 commit；
+- 不允许 push；
+- 安装依赖并执行完整测试；
+- 自动检测 `test`、`lint`、`build`、`typecheck` npm scripts；
+- 重启 `secure-local-workspace-mcp` runtime。
+
+项目必须已经设置 Git 身份：
+
+```powershell
+git -C "D:\Projects\my-app" config user.name "Your Name"
+git -C "D:\Projects\my-app" config user.email "you@example.com"
+```
+
+也可以使用全局 Git 配置。
+
+## 场景二：首次完整部署
+
+先在 OpenAI Platform 创建 Tunnel 和 Runtime Key，并下载官方客户端。然后：
 
 ```powershell
 $RepositoryRoot = "D:\Tools\secure-local-workspace-mcp"
-$AuthorizedProject = "D:\Projects\my-app"
+$ProjectRoot = "D:\Projects\my-app"
+$ProjectsRoot = "D:\Projects"
 $TunnelClient = "C:\Tools\tunnel-client\tunnel-client.exe"
-$TunnelId = "tunnel_REPLACE_ME"
 $RuntimeKeyFile = "C:\Secrets\openai-tunnel-runtime-key.txt"
-$StateRoot = Join-Path $env:USERPROFILE ".secure-local-workspace-mcp"
-$ProfileDir = Join-Path $StateRoot "tunnel-profiles"
+$TunnelId = "tunnel_REPLACEME"
+
+Set-Location $RepositoryRoot
+
+.\scripts\quick-setup.ps1 `
+  -ProjectRoot $ProjectRoot `
+  -DiscoveryRoot $ProjectsRoot `
+  -TunnelId $TunnelId `
+  -TunnelClient $TunnelClient `
+  -ControlPlaneApiKeyRef ("file:" + $RuntimeKeyFile) `
+  -RegisterStartup `
+  -StartTunnel
 ```
 
-`RuntimeKeyFile` 必须位于仓库外，建议只允许当前 Windows 用户读取。脚本只把 `file:<path>` 引用写入 profile，不读取或回显密钥。
-
-## 方案一：逐步自动化（推荐）
-
-### 1. 安装和自检
+代理环境增加：
 
 ```powershell
-Set-Location $RepositoryRoot
+-HttpProxy "http://127.0.0.1:7890"
+```
+
+脚本顺序：依赖安装 → 测试 → 配置写入 → `tunnel-client init` → `doctor --explain` → 注册计划任务 → 启动。
+
+## 场景三：只读接入
+
+```powershell
+.\scripts\quick-setup.ps1 `
+  -ProjectRoot "D:\Projects\audit-only" `
+  -ReadOnly `
+  -SkipInstall `
+  -SkipTests `
+  -RestartTunnel
+```
+
+只读项目不能修改、删除、commit 或 push。
+
+## 场景四：受控 push
+
+```powershell
+.\scripts\quick-setup.ps1 `
+  -ProjectRoot "D:\Projects\my-app" `
+  -AllowPush `
+  -AllowedRemote "origin" `
+  -AllowedBranch "main" `
+  -SkipInstall `
+  -SkipTests `
+  -RestartTunnel
+```
+
+建议始终设置 `AllowedBranch`。`git_push` 只会执行非强制的当前 HEAD 推送，不支持 force、删除远端分支或推送其他 ref。
+
+## 场景五：批准新的项目库父目录
+
+```powershell
+.\scripts\quick-setup.ps1 `
+  -DiscoveryRoot "E:\Repositories" `
+  -SkipInstall `
+  -SkipTests `
+  -RestartTunnel
+```
+
+之后 ChatGPT 可通过 `discover_projects` 查看该目录内的 Git 项目，并在用户批准工具调用后使用 `connect_project` 接入单个项目。发现过程默认限制深度、项目数和扫描目录数，不跟随目录符号链接。
+
+不要批准磁盘根目录、用户主目录或包含大量隐私文件的目录。
+
+## 跨平台配置 CLI
+
+不使用 PowerShell 时，可以运行：
+
+```powershell
+npm run config -- add-discovery-root --root "D:\Projects"
+
+npm run config -- add-project `
+  --root "D:\Projects\my-app" `
+  --writable `
+  --allow-commit `
+  --no-push `
+  --remote origin `
+  --branch main
+
+npm run config -- list
+```
+
+设置 `LOCAL_PROJECT_WORKSPACE_CONFIG` 可选择非默认配置文件。写入采用同目录临时文件加原子替换，不会清空其他项目。
+
+## 兼容配置脚本
+
+`bootstrap-config.ps1` 适合只增加或更新一个项目：
+
+```powershell
+.\scripts\bootstrap-config.ps1 `
+  -ProjectId "my-app" `
+  -ProjectLabel "我的应用" `
+  -ProjectRoot "D:\Projects\my-app" `
+  -Writable `
+  -AllowCommit
+```
+
+新版脚本不会覆盖整个配置。`-Force` 仅为旧调用兼容保留，不再触发全量替换。
+
+## 自动化验证
+
+```powershell
 npm ci
 npm test
 npm run smoke:mcp
 npm audit --omit=dev
 ```
 
-### 2. 生成只读授权配置
-
-```powershell
-.\scripts\bootstrap-config.ps1 `
-  -ProjectId "my-app" `
-  -ProjectLabel "我的应用" `
-  -ProjectRoot $AuthorizedProject
-```
-
-先使用 `-WhatIf` 预览：
-
-```powershell
-.\scripts\bootstrap-config.ps1 `
-  -ProjectId "my-app" `
-  -ProjectRoot $AuthorizedProject `
-  -WhatIf
-```
-
-只有确认 AI 可以修改该项目时才加入 `-Writable`。配置已存在时脚本拒绝覆盖，必须显式传入 `-Force`。
-
-### 3. 生成 Tunnel profile
-
-```powershell
-.\scripts\setup-tunnel.ps1 `
-  -TunnelId $TunnelId `
-  -TunnelClient $TunnelClient `
-  -ControlPlaneApiKeyRef ("file:" + $RuntimeKeyFile) `
-  -ProfileDir $ProfileDir
-```
-
-需要 HTTP 代理时：
-
-```powershell
-.\scripts\setup-tunnel.ps1 `
-  -TunnelId $TunnelId `
-  -TunnelClient $TunnelClient `
-  -ControlPlaneApiKeyRef ("file:" + $RuntimeKeyFile) `
-  -ProfileDir $ProfileDir `
-  -HttpProxy "http://127.0.0.1:7890"
-```
-
-已有 profile 默认不会被覆盖。确认替换后显式添加 `-Force`。
-
-### 4. 前台验收
-
-首次运行应使用前台模式，方便查看错误：
-
-```powershell
-& $TunnelClient run `
-  --profile secure-local-workspace-mcp `
-  --profile-dir $ProfileDir
-```
-
-在另一个 PowerShell 中检查：
+检查 Tunnel：
 
 ```powershell
 & $TunnelClient doctor `
   --profile secure-local-workspace-mcp `
-  --profile-dir $ProfileDir `
+  --profile-dir "$env:USERPROFILE\.secure-local-workspace-mcp\tunnel-profiles" `
   --explain
+
+& $TunnelClient runtimes status secure-local-workspace-mcp --json
 ```
 
-只有本地进程存在不代表远端可用。至少确认：
+至少确认：
 
-- `process_running = true`；
-- `healthy = true`；
-- `ready = true`；
-- Tunnel 远端查询没有鉴权或网络错误。
-
-### 5. 注册登录自启动
-
-先预览：
-
-```powershell
-.\scripts\register-tunnel-startup.ps1 `
-  -TunnelClient $TunnelClient `
-  -ProfileDir $ProfileDir `
-  -WhatIf
+```text
+process_running = true
+healthy = true
+ready = true
 ```
 
-正式注册：
+## ChatGPT 验收提示词
 
-```powershell
-.\scripts\register-tunnel-startup.ps1 `
-  -TunnelClient $TunnelClient `
-  -ProfileDir $ProfileDir
+```text
+@Secure Local Workspace MCP
+调用 diagnostics、list_projects 和 discover_projects。
+只列出项目权限，不读取代码。
 ```
 
-如需立即启动，添加 `-StartNow`。任务已存在时默认拒绝替换；确认后使用 `-Force`。
-
-### 6. 验证计划任务
-
-```powershell
-Get-ScheduledTask -TaskName "Secure Local Workspace MCP Tunnel"
-Get-ScheduledTaskInfo -TaskName "Secure Local Workspace MCP Tunnel"
+```text
+读取 my-app 的 README，进行一个可逆的小修改，运行允许的测试，
+展示 git_diff 和 git_status，但不要提交。
 ```
 
-计划任务直接运行 tunnel-client，不会把 Runtime Key 内容写入任务参数。profile 中只保存环境变量或文件引用。
-
-## 方案二：可复制的一次性编排示例
-
-下面的示例按顺序调用仓库脚本；任何一步失败都会停止：
-
-```powershell
-$ErrorActionPreference = "Stop"
-
-Set-Location $RepositoryRoot
-npm ci
-npm test
-npm run smoke:mcp
-
-.\scripts\bootstrap-config.ps1 `
-  -ProjectId "my-app" `
-  -ProjectLabel "我的应用" `
-  -ProjectRoot $AuthorizedProject
-
-.\scripts\setup-tunnel.ps1 `
-  -TunnelId $TunnelId `
-  -TunnelClient $TunnelClient `
-  -ControlPlaneApiKeyRef ("file:" + $RuntimeKeyFile) `
-  -ProfileDir $ProfileDir
-
-.\scripts\register-tunnel-startup.ps1 `
-  -TunnelClient $TunnelClient `
-  -ProfileDir $ProfileDir `
-  -StartNow
+```text
+使用最新 statusSha256，只提交我刚才确认的明确文件。
+不要包含其他改动，不要 push。分别报告 commit SHA 和 push 状态。
 ```
-
-此示例故意不包含真实 ID、路径和密钥，也不使用 `-Writable` 或 `-Force`。
-
-## 多项目配置
-
-`bootstrap-config.ps1` 用于安全创建首个配置。多项目环境建议在代码审查后编辑本地 `config.json`，为每个项目指定不同 ID、根目录、只读/可写状态和任务白名单。
-
-不要把多个项目共同授权到过宽的父目录，例如磁盘根目录、用户主目录或整个开发盘。
-
-## 代理环境
-
-如果浏览器能访问 OpenAI，但 tunnel-client 连接超时，常见原因是浏览器读取了系统代理，而 tunnel-client 仍尝试直连。
-
-处理顺序：
-
-1. 确认代理监听地址和端口；
-2. 用 `-HttpProxy` 把代理写入 profile；
-3. 重新运行 doctor；
-4. 检查日志中是否仍出现直连伪 IP；
-5. 不要把带用户名/密码的代理 URL 提交到 Git。
 
 ## 回滚
 
-停止并删除计划任务：
+停止和删除计划任务：
 
 ```powershell
 Stop-ScheduledTask -TaskName "Secure Local Workspace MCP Tunnel" -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName "Secure Local Workspace MCP Tunnel" -Confirm:$false
 ```
 
-删除 profile 或配置前先确认精确路径。删除计划任务不会撤销 OpenAI Platform 中的 Tunnel 或 Runtime Key；如不再使用，应在官方界面单独撤销 Key，并按需要删除 Tunnel。
+这不会删除项目、配置、Runtime Key 或 OpenAI Platform 中的 Tunnel。
 
-## 自动化后的隐私验收
+撤销单个项目授权可以在 ChatGPT 中调用 `disconnect_project`，或在本地审查并编辑配置。撤销授权不会删除项目文件或 Git 历史。
+
+如不再使用 Tunnel，应在 OpenAI Platform 单独撤销 Runtime Key，并按需要删除 Tunnel。
+
+## 隐私验收
+
+公开 fork 或提交本仓库前检查：
 
 ```powershell
 git status --short
 git ls-files
 ```
 
-确认 Git 中不存在：
+不得提交：
 
-- `.secure-local-workspace-mcp/`；
-- `config.json`；
-- `tunnel-profiles/`、`secrets/`、`downloads/`、`bin/`；
-- `.env`、证书、私钥和日志；
-- Runtime Key、Tunnel ID、组织 ID 或个人绝对路径。
+- `.secure-local-workspace-mcp/` 或 `.local-project-workspace/`；
+- 真实 `config.json`；
+- Tunnel profile、Runtime Key、日志和下载文件；
+- `.env`、私钥、证书或密码库；
+- 真实 Tunnel ID、组织 ID 或个人绝对路径。
 
-公开仓库前应扫描最终提交树，而不仅是工作目录。
+MCP 的提交扫描是最后一道保护，不替代 Git diff 审查、密钥管理和泄漏后的吊销流程。

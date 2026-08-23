@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -21,6 +22,15 @@ async function fixture(t) {
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, "src"));
   await writeFile(path.join(root, "src", "hello.js"), "export const greeting = 'hello';\n", "utf8");
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "MCP Test"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.invalid"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["add", "."], { cwd: root, stdio: "ignore" });
+  execFileSync(
+    "git",
+    ["commit", "-m", "initial"],
+    { cwd: root, stdio: "ignore" },
+  );
   const config = {
     configPath: path.join(root, "config.json"),
     limits,
@@ -37,6 +47,12 @@ async function fixture(t) {
             args: ["-e", "process.stdout.write('task-ok')"],
             timeoutSeconds: 10,
           },
+        },
+        git: {
+          allowCommit: true,
+          allowPush: false,
+          allowedRemotes: ["origin"],
+          allowedBranches: [],
         },
       },
     ],
@@ -87,6 +103,108 @@ test("applies a hash-guarded unified patch and rejects stale writes", async (t) 
     }),
     /File changed since it was read/,
   );
+});
+
+test("deletes a text file only with its latest hash", async (t) => {
+  const { root, service } = await fixture(t);
+  const before = await service.readFile({ projectId: "fixture", path: "src/hello.js" });
+  await assert.rejects(
+    service.deleteTextFile({ projectId: "fixture", path: "src/hello.js", expectedSha256: "0".repeat(64) }),
+    /File changed since it was read/,
+  );
+  const deleted = await service.deleteTextFile({
+    projectId: "fixture",
+    path: "src/hello.js",
+    expectedSha256: before.sha256,
+  });
+  assert.equal(deleted.deleted, true);
+  await assert.rejects(readFile(path.join(root, "src", "hello.js"), "utf8"), /ENOENT/);
+});
+
+test("commits only explicit paths after status review", async (t) => {
+  const { root, service } = await fixture(t);
+  await writeFile(path.join(root, "src", "hello.js"), "export const greeting = 'committed';\n", "utf8");
+  await writeFile(path.join(root, "src", "unrelated.js"), "export const unrelated = true;\n", "utf8");
+  const status = await service.gitStatus({ projectId: "fixture" });
+  const blockingHook = path.join(root, ".git", "hooks", "pre-commit");
+  await writeFile(blockingHook, "#!/bin/sh\nexit 1\n", "utf8");
+  await chmod(blockingHook, 0o755);
+  await assert.rejects(
+    service.gitCommit({
+      projectId: "fixture",
+      paths: ["src"],
+      message: "test: reject directory",
+      expectedStatusSha256: status.statusSha256,
+    }),
+    /must name files/,
+  );
+  const commit = await service.gitCommit({
+    projectId: "fixture",
+    paths: ["src/hello.js"],
+    message: "test: commit explicit file",
+    expectedStatusSha256: status.statusSha256,
+  });
+  assert.match(commit.commitSha, /^[a-f0-9]{40}$/);
+  assert.deepEqual(commit.paths, ["src/hello.js"]);
+  assert.equal(commit.pushPerformed, false);
+  const after = await service.gitStatus({ projectId: "fixture" });
+  assert.match(after.stdout, /\?\? src\/unrelated\.js/);
+  assert.doesNotMatch(after.stdout, /hello\.js/);
+});
+
+test("rejects stale commit state and sensitive files without leaving them staged", async (t) => {
+  const { root, service } = await fixture(t);
+  const clean = await service.gitStatus({ projectId: "fixture" });
+  await writeFile(path.join(root, "src", "hello.js"), "export const greeting = 'changed';\n", "utf8");
+  await assert.rejects(
+    service.gitCommit({
+      projectId: "fixture",
+      paths: ["src/hello.js"],
+      message: "test: stale",
+      expectedStatusSha256: clean.statusSha256,
+    }),
+    /Git status changed/,
+  );
+
+  const fakeKey = `sk-${"a".repeat(32)}`;
+  await writeFile(path.join(root, ".env"), `OPENAI_API_KEY=${fakeKey}\n`, "utf8");
+  const status = await service.gitStatus({ projectId: "fixture" });
+  await assert.rejects(
+    service.gitCommit({
+      projectId: "fixture",
+      paths: [".env"],
+      message: "test: should fail",
+      expectedStatusSha256: status.statusSha256,
+    }),
+    /environment file/,
+  );
+  const after = await service.gitStatus({ projectId: "fixture" });
+  assert.deepEqual(after.stagedPaths, []);
+});
+
+test("refuses pre-staged changes and can unstage without changing the working file", async (t) => {
+  const { root, service } = await fixture(t);
+  const changed = "export const greeting = 'staged';\n";
+  await writeFile(path.join(root, "src", "hello.js"), changed, "utf8");
+  execFileSync("git", ["add", "--", "src/hello.js"], { cwd: root, stdio: "ignore" });
+  const status = await service.gitStatus({ projectId: "fixture" });
+  await assert.rejects(
+    service.gitCommit({
+      projectId: "fixture",
+      paths: ["src/hello.js"],
+      message: "test: refuse mixed index",
+      expectedStatusSha256: status.statusSha256,
+    }),
+    /pre-existing staged changes/,
+  );
+  const unstaged = await service.gitUnstage({
+    projectId: "fixture",
+    paths: ["src/hello.js"],
+    expectedStatusSha256: status.statusSha256,
+  });
+  assert.deepEqual(unstaged.stagedPaths, []);
+  assert.equal(await readFile(path.join(root, "src", "hello.js"), "utf8"), changed);
+  assert.match(unstaged.stdout, /src\/hello\.js/);
 });
 
 test("creates new files without overwriting and runs only allowlisted tasks", async (t) => {

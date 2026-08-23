@@ -11,6 +11,10 @@ param(
 
   [switch]$Writable,
 
+  [switch]$AllowCommit,
+
+  [switch]$AllowPush,
+
   [string]$ConfigPath = (Join-Path $env:USERPROFILE ".secure-local-workspace-mcp\config.json"),
 
   [string[]]$IgnoreNames = @("node_modules", ".git", "dist", "build", "coverage"),
@@ -20,44 +24,36 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$pluginRoot = Split-Path -Parent $PSScriptRoot
 $resolvedProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
-if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
-  throw "ProjectRoot must be an existing directory."
-}
-
 $resolvedConfigPath = [IO.Path]::GetFullPath($ConfigPath)
-if ((Test-Path -LiteralPath $resolvedConfigPath) -and -not $Force) {
-  throw "Configuration already exists: $resolvedConfigPath. Use -Force only when replacement is intentional."
-}
+$arguments = @(
+  (Join-Path $pluginRoot "scripts\configure.mjs"),
+  "add-project",
+  "--root", $resolvedProjectRoot,
+  "--id", $ProjectId,
+  "--label", $(if ($ProjectLabel) { $ProjectLabel } else { $ProjectId })
+)
+if ($Writable) { $arguments += "--writable" } else { $arguments += "--read-only" }
+if ($AllowCommit) { $arguments += "--allow-commit" } else { $arguments += "--no-commit" }
+if ($AllowPush) { $arguments += "--allow-push" } else { $arguments += "--no-push" }
+foreach ($name in $IgnoreNames) { $arguments += @("--ignore", $name) }
 
-$label = if ($ProjectLabel) { $ProjectLabel } else { $ProjectId }
-$config = [ordered]@{
-  projects = @(
-    [ordered]@{
-      id = $ProjectId
-      label = $label
-      root = $resolvedProjectRoot
-      writable = [bool]$Writable
-      ignoreNames = $IgnoreNames
-      tasks = [ordered]@{}
+if ($AllowCommit -and -not $Writable) { throw "-AllowCommit requires -Writable." }
+if ($AllowPush -and -not $AllowCommit) { throw "-AllowPush requires -AllowCommit." }
+
+if ($PSCmdlet.ShouldProcess($resolvedConfigPath, "Add or update one authorized project without replacing other projects")) {
+  $previousConfig = [Environment]::GetEnvironmentVariable("LOCAL_PROJECT_WORKSPACE_CONFIG", "Process")
+  try {
+    $env:LOCAL_PROJECT_WORKSPACE_CONFIG = $resolvedConfigPath
+    & node @arguments | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Project configuration failed with exit code $LASTEXITCODE." }
+  } finally {
+    if ($null -eq $previousConfig) {
+      Remove-Item Env:\LOCAL_PROJECT_WORKSPACE_CONFIG -ErrorAction SilentlyContinue -WhatIf:$false -Confirm:$false
     }
-  )
-  limits = [ordered]@{
-    maxReadBytes = 1048576
-    maxReadLines = 1200
-    maxSearchFileBytes = 1048576
-    maxSearchFiles = 5000
-    maxSearchResults = 200
-    maxWriteBytes = 1048576
-    maxCommandOutputBytes = 262144
+    else { $env:LOCAL_PROJECT_WORKSPACE_CONFIG = $previousConfig }
   }
-}
-
-if ($PSCmdlet.ShouldProcess($resolvedConfigPath, "Write local workspace authorization configuration")) {
-  $parent = Split-Path -Parent $resolvedConfigPath
-  New-Item -ItemType Directory -Force -Path $parent | Out-Null
-  $json = $config | ConvertTo-Json -Depth 10
-  [IO.File]::WriteAllText($resolvedConfigPath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 }
 
 [pscustomobject]@{
@@ -65,4 +61,6 @@ if ($PSCmdlet.ShouldProcess($resolvedConfigPath, "Write local workspace authoriz
   ProjectId = $ProjectId
   ProjectRoot = $resolvedProjectRoot
   Writable = [bool]$Writable
+  AllowCommit = [bool]$AllowCommit
+  AllowPush = [bool]$AllowPush
 }

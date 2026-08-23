@@ -1,6 +1,6 @@
 {
   "name": "secure-local-workspace-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "A safety-scoped MCP gateway that lets ChatGPT and Codex work with explicitly authorized local projects.",
@@ -24,7 +24,8 @@
   "scripts": {
     "start": "node ./src/server.mjs",
     "test": "node --test",
-    "smoke:mcp": "node ./scripts/smoke-mcp.mjs"
+    "smoke:mcp": "node ./scripts/smoke-mcp.mjs",
+    "config": "node ./scripts/configure.mjs"
   },
   "engines": {
     "node": ">=20"

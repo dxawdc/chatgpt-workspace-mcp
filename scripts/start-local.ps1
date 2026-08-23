@@ -13,7 +13,7 @@ $configPath = if ($env:LOCAL_PROJECT_WORKSPACE_CONFIG) {
 }
 
 if (-not (Test-Path -LiteralPath $configPath)) {
-  throw "Configuration not found: $configPath. Copy config.example.json and authorize at least one project."
+  throw "Configuration not found: $configPath. Run scripts\quick-setup.ps1 or npm run config to authorize a project."
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $pluginRoot "node_modules"))) {
