@@ -1,0 +1,37 @@
+{
+  "name": "local-project-workspace",
+  "version": "0.1.0+codex.20260823111029",
+  "description": "Safely read, search, edit, test, and review explicitly allowed local projects through MCP.",
+  "author": {
+    "name": "Local Project Workspace contributors"
+  },
+  "homepage": "https://github.com/dxawdc/local-project-workspace",
+  "repository": "https://github.com/dxawdc/local-project-workspace",
+  "license": "MIT",
+  "keywords": [
+    "chatgpt",
+    "codex",
+    "mcp",
+    "local-files"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Local Project Workspace",
+    "shortDescription": "Work safely with explicitly allowed local project folders.",
+    "longDescription": "Connect ChatGPT or Codex to selected local projects through a safety-scoped MCP server. Read and search files, apply hash-guarded patches, run allowlisted tasks, and review Git changes without exposing an arbitrary shell.",
+    "developerName": "Local Project Workspace contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Local files",
+      "Code editing",
+      "Testing",
+      "Git review"
+    ],
+    "defaultPrompt": [
+      "List the local projects I have authorized.",
+      "Inspect a project, make the requested change, run its tests, and show the diff.",
+      "Search an authorized project for the code related to this bug."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

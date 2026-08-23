@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "local-project-workspace": {
+      "title": "Local Project Workspace",
+      "description": "Safety-scoped access to explicitly allowed local projects.",
+      "cwd": ".",
+      "command": "node",
+      "args": ["./src/server.mjs"]
+    }
+  }
+}

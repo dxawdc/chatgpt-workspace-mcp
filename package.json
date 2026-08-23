@@ -1,0 +1,36 @@
+{
+  "name": "local-project-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A safety-scoped MCP server that lets ChatGPT and Codex work with explicitly allowed local projects.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dxawdc/local-project-workspace.git"
+  },
+  "homepage": "https://github.com/dxawdc/local-project-workspace#readme",
+  "bugs": {
+    "url": "https://github.com/dxawdc/local-project-workspace/issues"
+  },
+  "keywords": [
+    "chatgpt",
+    "codex",
+    "mcp",
+    "local-files",
+    "developer-tools"
+  ],
+  "scripts": {
+    "start": "node ./src/server.mjs",
+    "test": "node --test",
+    "smoke:mcp": "node ./scripts/smoke-mcp.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "diff": "^9.0.0",
+    "zod": "^4.4.3"
+  }
+}

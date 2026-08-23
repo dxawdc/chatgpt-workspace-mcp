@@ -1,0 +1,32 @@
+{
+  "projects": [
+    {
+      "id": "my-app",
+      "label": "My application",
+      "root": "D:\\Projects\\my-app",
+      "writable": true,
+      "ignoreNames": ["node_modules", ".git", "dist", "build", "coverage"],
+      "tasks": {
+        "test": {
+          "command": "npm",
+          "args": ["test"],
+          "timeoutSeconds": 300
+        },
+        "build": {
+          "command": "npm",
+          "args": ["run", "build"],
+          "timeoutSeconds": 300
+        }
+      }
+    }
+  ],
+  "limits": {
+    "maxReadBytes": 1048576,
+    "maxReadLines": 1200,
+    "maxSearchFileBytes": 1048576,
+    "maxSearchFiles": 5000,
+    "maxSearchResults": 200,
+    "maxWriteBytes": 1048576,
+    "maxCommandOutputBytes": 262144
+  }
+}
