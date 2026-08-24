@@ -1,6 +1,6 @@
 # Windows 自动化配置参考
 
-本文面向希望快速部署 Secure Local Workspace MCP 的 Windows 用户。自动化目标是减少 JSON 手工编辑和重复命令，同时保留账号、密钥、项目范围、commit 和 push 权限的人工控制。
+本文面向希望快速部署 ChatGPT Workspace MCP 的 Windows 用户。自动化目标是减少 JSON 手工编辑和重复命令，同时保留账号、密钥、项目范围、commit 和 push 权限的人工控制。
 
 ## 自动化边界
 
@@ -29,9 +29,9 @@
 ## 推荐目录
 
 ```text
-源码仓库       D:\Tools\secure-local-workspace-mcp
-授权配置       %USERPROFILE%\.secure-local-workspace-mcp\config.json
-Tunnel profile %USERPROFILE%\.secure-local-workspace-mcp\tunnel-profiles\
+源码仓库       D:\Tools\chatgpt-workspace-mcp
+授权配置       %USERPROFILE%\.chatgpt-workspace-mcp\config.json
+Tunnel profile %USERPROFILE%\.chatgpt-workspace-mcp\tunnel-profiles\
 Runtime Key    C:\Secrets\openai-tunnel-runtime-key.txt
 项目父目录     D:\Projects\
 ```
@@ -41,7 +41,7 @@ Runtime Key    C:\Secrets\openai-tunnel-runtime-key.txt
 ## 场景一：已有 Tunnel，一条命令接入项目
 
 ```powershell
-Set-Location "D:\Tools\secure-local-workspace-mcp"
+Set-Location "D:\Tools\chatgpt-workspace-mcp"
 
 .\scripts\quick-setup.ps1 `
   -ProjectRoot "D:\Projects\my-app" `
@@ -56,7 +56,7 @@ Set-Location "D:\Tools\secure-local-workspace-mcp"
 - 不允许 push；
 - 安装依赖并执行完整测试；
 - 自动检测 `test`、`lint`、`build`、`typecheck` npm scripts；
-- 重启 `secure-local-workspace-mcp` runtime。
+- 重启 `chatgpt-workspace-mcp` runtime。
 
 项目必须已经设置 Git 身份：
 
@@ -72,7 +72,7 @@ git -C "D:\Projects\my-app" config user.email "you@example.com"
 先在 OpenAI Platform 创建 Tunnel 和 Runtime Key，并下载官方客户端。然后：
 
 ```powershell
-$RepositoryRoot = "D:\Tools\secure-local-workspace-mcp"
+$RepositoryRoot = "D:\Tools\chatgpt-workspace-mcp"
 $ProjectRoot = "D:\Projects\my-app"
 $ProjectsRoot = "D:\Projects"
 $TunnelClient = "C:\Tools\tunnel-client\tunnel-client.exe"
@@ -189,11 +189,11 @@ npm audit --omit=dev
 
 ```powershell
 & $TunnelClient doctor `
-  --profile secure-local-workspace-mcp `
-  --profile-dir "$env:USERPROFILE\.secure-local-workspace-mcp\tunnel-profiles" `
+  --profile chatgpt-workspace-mcp `
+  --profile-dir "$env:USERPROFILE\.chatgpt-workspace-mcp\tunnel-profiles" `
   --explain
 
-& $TunnelClient runtimes status secure-local-workspace-mcp --json
+& $TunnelClient runtimes status chatgpt-workspace-mcp --json
 ```
 
 至少确认：
@@ -207,7 +207,7 @@ ready = true
 ## ChatGPT 验收提示词
 
 ```text
-@Secure Local Workspace MCP
+@ChatGPT Workspace MCP
 调用 diagnostics、list_projects 和 discover_projects。
 只列出项目权限，不读取代码。
 ```
@@ -227,8 +227,8 @@ ready = true
 停止和删除计划任务：
 
 ```powershell
-Stop-ScheduledTask -TaskName "Secure Local Workspace MCP Tunnel" -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName "Secure Local Workspace MCP Tunnel" -Confirm:$false
+Stop-ScheduledTask -TaskName "ChatGPT Workspace MCP Tunnel" -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName "ChatGPT Workspace MCP Tunnel" -Confirm:$false
 ```
 
 这不会删除项目、配置、Runtime Key 或 OpenAI Platform 中的 Tunnel。
@@ -248,7 +248,7 @@ git ls-files
 
 不得提交：
 
-- `.secure-local-workspace-mcp/` 或 `.local-project-workspace/`；
+- `.chatgpt-workspace-mcp/`、旧版 `.secure-local-workspace-mcp/` 或 `.local-project-workspace/`；
 - 真实 `config.json`；
 - Tunnel profile、Runtime Key、日志和下载文件；
 - `.env`、私钥、证书或密码库；

@@ -146,7 +146,7 @@ async function addProject(config, args) {
 }
 
 function usage() {
-  return `Secure Local Workspace MCP configuration
+  return `ChatGPT Workspace MCP configuration
 
 Commands:
   node scripts/configure.mjs add-discovery-root --root <folder>

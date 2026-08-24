@@ -31,7 +31,7 @@ function register(server, name, definition, handler) {
 const config = await loadConfig();
 const service = createWorkspaceService(config, { persistConfig: (nextConfig) => saveConfig(nextConfig) });
 const server = new McpServer(
-  { name: "secure-local-workspace-mcp", version: "0.3.0" },
+  { name: "chatgpt-workspace-mcp", version: "0.3.0" },
   {
     instructions:
       "Work only with authorized projects or projects discovered beneath locally approved discovery roots. Both Git and non-Git projects are supported; never call Git tools for a project whose projectType is non-git. Read a file immediately before editing or deleting and pass its sha256. Preserve unrelated changes. Before git_commit, call git_status and git_diff, pass the latest statusSha256, and list only intended paths. Commit and push are separate actions; never imply a push occurred unless git_push succeeds. This server has no arbitrary shell, force-push, history rewrite, or deploy tools.",
@@ -302,4 +302,4 @@ register(
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error(`secure-local-workspace-mcp ready; config=${config.configPath}; projects=${config.projects.length}`);
+console.error(`chatgpt-workspace-mcp ready; config=${config.configPath}; projects=${config.projects.length}`);

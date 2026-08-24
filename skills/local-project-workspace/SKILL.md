@@ -1,9 +1,9 @@
 ---
 name: local-project-workspace
-description: Discover approved Git and non-Git projects and safely inspect, edit, test, and use guarded Git delivery when available through Secure Local Workspace MCP tools.
+description: Discover approved Git and non-Git projects and safely inspect, edit, test, and use guarded Git delivery when available through ChatGPT Workspace MCP tools.
 ---
 
-# Secure Local Workspace MCP
+# ChatGPT Workspace MCP
 
 Use the MCP tools to work only with project IDs returned by `list_projects`.
 

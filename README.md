@@ -1,10 +1,10 @@
-# Secure Local Workspace MCP（安全本地工作区 MCP）
+# ChatGPT Workspace MCP（ChatGPT 本地工作区 MCP）
 
 [English](README.en.md) | 中文（默认）
 
 让 ChatGPT 网页版安全连接本地项目：无论是否使用 Git，都可以查看、搜索和修改文件、运行白名单任务；Git 项目还可以检查差异、创建本地提交，并在用户显式授权后推送到指定远端和分支。
 
-你不需要安装 Codex。ChatGPT 通过 OpenAI Secure MCP Tunnel 调用仍运行在你电脑上的 MCP 服务；项目目录和 MCP 端口不需要暴露到公网。
+你不需要安装 Codex。ChatGPT 通过 OpenAI Secure MCP Tunnel 调用仍运行在你电脑上的 MCP 服务；项目目录和 MCP 端口不需要暴露到公网。项目只开放经过批准的目录和固定能力，不向模型提供任意 Shell。
 
 ## 先选你的使用场景
 
@@ -63,9 +63,33 @@ git config --global user.email "you@example.com"
 ### 第 2 步：下载项目
 
 ```powershell
-git clone https://github.com/dxawdc/secure-local-workspace-mcp.git
-Set-Location .\secure-local-workspace-mcp
+git clone https://github.com/dxawdc/chatgpt-workspace-mcp.git
+Set-Location .\chatgpt-workspace-mcp
 ```
+
+如果你是从原仓库地址拉取、但 GitHub 仓库还没有同步改名，也可以继续使用旧 URL；本地目录名、包名和 MCP 服务名均已改为 `chatgpt-workspace-mcp`。
+
+### 可选：把整个仓库直接交给 AI 配置
+
+如果你使用 Codex、Claude Code、Cursor Agent 或其他具有本地终端权限的 AI，可以直接打开本仓库，把下面这段提示词交给它。AI 可以检查环境、安装依赖、运行测试、生成安全的配置命令并执行本地步骤；创建 Tunnel、生成 Runtime API Key、授权 ChatGPT workspace 和在 ChatGPT 中确认连接仍需你本人完成。
+
+```text
+请阅读本仓库的 README.md、SECURITY.md、package.json 和 scripts/quick-setup.ps1，
+帮我在 Windows 上部署 ChatGPT Workspace MCP。
+
+要求：
+1. 先只读检查 git、node、npm、PowerShell 和项目当前状态，不要立即修改系统配置。
+2. 告诉我仍需提供的 ProjectRoot、DiscoveryRoot、TunnelId、tunnel-client.exe 路径和 Runtime Key 文件路径；
+   不要索要或回显 Runtime Key 的内容，也不要把密钥写入仓库或命令行。
+3. DiscoveryRoot 只能使用我明确批准的代码项目父目录，禁止使用磁盘根目录或整个用户目录。
+4. 信息齐全后运行 npm ci、npm test 和 npm run smoke:mcp。
+5. 根据我的选择执行 scripts/quick-setup.ps1；默认允许文件读写和本地 commit，但不要启用 push。
+6. 执行后运行 npm run config -- list，检查 Tunnel profile/计划任务状态，并汇总实际变更。
+7. 最后列出必须由我在 OpenAI Platform 和 ChatGPT 页面手动完成的步骤，以及一段连接验收提示词。
+8. 遇到账号授权、密钥、扩大目录权限、启用 push 或覆盖既有 Tunnel profile 时暂停并征求我确认。
+```
+
+建议先让 AI 执行到“列出所需信息”为止，再逐项提供非敏感路径和 Tunnel ID。Runtime Key 只通过仓库外的 `file:` 引用传给脚本，不要粘贴到对话中。AI 执行完后仍应人工检查 `git diff`、授权目录和最终配置。
 
 ### 第 3 步：在 OpenAI 页面准备 Tunnel
 
@@ -227,7 +251,7 @@ ChatGPT 调用 `connect_project` 后配置会立即持久化并在当前 MCP 进
 ### 1. 只查看和分析
 
 ```text
-使用 Secure Local Workspace MCP 检查项目 my-app。
+使用 ChatGPT Workspace MCP 检查项目 my-app。
 先调用 list_projects 确认项目，再查看与登录流程有关的代码。
 解释实现和可能的问题，不要修改文件，不要提交。
 ```
@@ -319,12 +343,13 @@ Push 是外部写操作，所以必须在本机针对项目显式开启。建议
 默认配置文件位于仓库外：
 
 ```text
-%USERPROFILE%\.secure-local-workspace-mcp\config.json
+%USERPROFILE%\.chatgpt-workspace-mcp\config.json
 ```
 
-如果新版配置不存在，服务会兼容读取旧路径：
+如果新版配置不存在，服务会依次兼容读取旧路径：
 
 ```text
+%USERPROFILE%\.secure-local-workspace-mcp\config.json
 %USERPROFILE%\.local-project-workspace\config.json
 ```
 
@@ -351,7 +376,7 @@ npm run config -- add-project `
 ## 更新项目
 
 ```powershell
-Set-Location .\secure-local-workspace-mcp
+Set-Location .\chatgpt-workspace-mcp
 git pull --ff-only
 npm ci
 npm test
@@ -373,8 +398,8 @@ npm run smoke:mcp
 如需移除登录自启动任务：
 
 ```powershell
-Stop-ScheduledTask -TaskName "Secure Local Workspace MCP Tunnel"
-Unregister-ScheduledTask -TaskName "Secure Local Workspace MCP Tunnel" -Confirm:$false
+Stop-ScheduledTask -TaskName "ChatGPT Workspace MCP Tunnel"
+Unregister-ScheduledTask -TaskName "ChatGPT Workspace MCP Tunnel" -Confirm:$false
 ```
 
 这不会删除 Tunnel、Runtime Key、profile 或项目文件。

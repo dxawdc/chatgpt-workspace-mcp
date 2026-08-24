@@ -15,7 +15,7 @@ param(
 
   [switch]$AllowPush,
 
-  [string]$ConfigPath = (Join-Path $env:USERPROFILE ".secure-local-workspace-mcp\config.json"),
+  [string]$ConfigPath = (Join-Path $env:USERPROFILE ".chatgpt-workspace-mcp\config.json"),
 
   [string[]]$IgnoreNames = @("node_modules", ".git", "dist", "build", "coverage"),
 

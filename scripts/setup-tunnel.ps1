@@ -3,7 +3,7 @@ param(
   [ValidatePattern("^tunnel_[A-Za-z0-9]+$")]
   [string]$TunnelId,
 
-  [string]$Profile = "secure-local-workspace-mcp",
+  [string]$Profile = "chatgpt-workspace-mcp",
 
   [string]$TunnelClient = "tunnel-client",
 

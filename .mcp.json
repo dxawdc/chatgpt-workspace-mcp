@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "secure-local-workspace-mcp": {
-      "title": "Secure Local Workspace MCP",
+    "chatgpt-workspace-mcp": {
+      "title": "ChatGPT Workspace MCP",
       "description": "Discover approved Git and non-Git projects, safely edit files, run tasks, and use guarded Git delivery when available.",
       "cwd": ".",
       "command": "node",

@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createTwoFilesPatch } from "diff";
 
-const tempRoot = await mkdtemp(path.join(os.tmpdir(), "secure-local-workspace-mcp-"));
+const tempRoot = await mkdtemp(path.join(os.tmpdir(), "chatgpt-workspace-mcp-"));
 const projectRoot = path.join(tempRoot, "project");
 const configPath = path.join(tempRoot, "config.json");
 await mkdir(path.join(projectRoot, "src"), { recursive: true });
@@ -57,7 +57,7 @@ try {
     env: { ...process.env, LOCAL_PROJECT_WORKSPACE_CONFIG: configPath },
     stderr: "pipe",
   });
-  const client = new Client({ name: "secure-local-workspace-mcp-smoke", version: "0.1.0" });
+  const client = new Client({ name: "chatgpt-workspace-mcp-smoke", version: "0.1.0" });
   await client.connect(transport);
   try {
     const listed = await client.listTools();

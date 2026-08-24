@@ -30,7 +30,7 @@ param(
   [ValidatePattern("^(env|file):.+$")]
   [string]$ControlPlaneApiKeyRef = "env:CONTROL_PLANE_API_KEY",
 
-  [string]$ProfileDir = (Join-Path $env:USERPROFILE ".secure-local-workspace-mcp\tunnel-profiles"),
+  [string]$ProfileDir = (Join-Path $env:USERPROFILE ".chatgpt-workspace-mcp\tunnel-profiles"),
 
   [string]$HttpProxy,
 
@@ -40,9 +40,9 @@ param(
 
   [switch]$ForceTunnelProfile,
 
-  [string]$RuntimeAlias = "secure-local-workspace-mcp",
+  [string]$RuntimeAlias = "chatgpt-workspace-mcp",
 
-  [string]$ScheduledTaskName = "Secure Local Workspace MCP Tunnel"
+  [string]$ScheduledTaskName = "ChatGPT Workspace MCP Tunnel"
 )
 
 $ErrorActionPreference = "Stop"
@@ -137,6 +137,7 @@ try {
   if ($TunnelId -or $RegisterStartup -or $RestartTunnel) {
     if (-not $TunnelClient) {
       $candidateRoots = @(
+        (Join-Path $env:USERPROFILE ".chatgpt-workspace-mcp"),
         (Join-Path $env:USERPROFILE ".secure-local-workspace-mcp"),
         (Join-Path $env:USERPROFILE ".local-project-workspace")
       )

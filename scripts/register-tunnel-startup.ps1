@@ -3,11 +3,11 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$TunnelClient,
 
-  [string]$Profile = "secure-local-workspace-mcp",
+  [string]$Profile = "chatgpt-workspace-mcp",
 
-  [string]$ProfileDir = (Join-Path $env:USERPROFILE ".secure-local-workspace-mcp\tunnel-profiles"),
+  [string]$ProfileDir = (Join-Path $env:USERPROFILE ".chatgpt-workspace-mcp\tunnel-profiles"),
 
-  [string]$TaskName = "Secure Local Workspace MCP Tunnel",
+  [string]$TaskName = "ChatGPT Workspace MCP Tunnel",
 
   [switch]$StartNow,
 
@@ -48,7 +48,7 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register user logon tunnel task")) {
     -Action $action `
     -Trigger $trigger `
     -Principal $principal `
-    -Description "Starts Secure Local Workspace MCP for ChatGPT and Codex." `
+    -Description "Starts ChatGPT Workspace MCP for ChatGPT and Codex." `
     -Force:$Force | Out-Null
 
   if ($StartNow) {

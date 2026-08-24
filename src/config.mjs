@@ -70,9 +70,14 @@ export function defaultConfigPath() {
   if (process.env.LOCAL_PROJECT_WORKSPACE_CONFIG) {
     return path.resolve(process.env.LOCAL_PROJECT_WORKSPACE_CONFIG);
   }
-  const preferred = path.join(os.homedir(), ".secure-local-workspace-mcp", "config.json");
-  const legacy = path.join(os.homedir(), ".local-project-workspace", "config.json");
-  return path.resolve(existsSync(preferred) || !existsSync(legacy) ? preferred : legacy);
+  const preferred = path.join(os.homedir(), ".chatgpt-workspace-mcp", "config.json");
+  const legacyPaths = [
+    path.join(os.homedir(), ".secure-local-workspace-mcp", "config.json"),
+    path.join(os.homedir(), ".local-project-workspace", "config.json"),
+  ];
+  if (existsSync(preferred)) return path.resolve(preferred);
+  const existingLegacy = legacyPaths.find((candidate) => existsSync(candidate));
+  return path.resolve(existingLegacy || preferred);
 }
 
 export async function loadConfig(configPath = defaultConfigPath()) {
