@@ -6,6 +6,14 @@ Safely connect ChatGPT to explicitly approved local projects. ChatGPT can discov
 
 The MCP server and project files remain on your computer. OpenAI Secure MCP Tunnel carries MCP calls without exposing a local port or granting an arbitrary shell.
 
+<!-- caige-author:start -->
+**Author: 才哥 (Cai Ge)** · WeChat Official Account: **可以叫我才哥**
+
+Scan with WeChat to follow:
+
+<img src="assets/caige-wechat-qrcode.jpg" alt="Follow 可以叫我才哥 on WeChat" width="172" height="172" />
+<!-- caige-author:end -->
+
 ## Choose your path
 
 | Situation | Start here |

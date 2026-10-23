@@ -6,6 +6,14 @@
 
 你不需要安装 Codex。ChatGPT 通过 OpenAI Secure MCP Tunnel 调用仍运行在你电脑上的 MCP 服务；项目目录和 MCP 端口不需要暴露到公网。项目只开放经过批准的目录和固定能力，不向模型提供任意 Shell。
 
+<!-- caige-author:start -->
+**作者：才哥** · 微信公众号：**可以叫我才哥**
+
+微信扫码关注：
+
+<img src="assets/caige-wechat-qrcode.jpg" alt="微信公众号「可以叫我才哥」扫码关注二维码" width="172" height="172" />
+<!-- caige-author:end -->
+
 ## 先选你的使用场景
 
 | 你的情况 | 从哪里开始 |
